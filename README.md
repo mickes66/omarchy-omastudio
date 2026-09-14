@@ -81,11 +81,14 @@ flowchart LR
 * **Leica & Evrensel DNG:** `.DNG`, `.RWL` (M, SL, Q serileri, drone ve akıllı telefonlar)
 * **Diğer:** Olympus (`.ORF`), Panasonic (`.RW2`), Hasselblad (`.3FR`)
 
-### 2. Akıcı ve Hassas Dokunmatik & Fare Etkileşimi
-* **Pinch-to-Zoom:** İmleç veya parmak merkezine logaritmik, sıçramasız yakınlaştırma.
-* **Akıllı Rotasyon:** Yakınlaştırma sırasında kazara dönmeyi engelleyen **3.5° ölü bölge (deadzone)** korumalı iki parmakla döndürme.
-* **Bağımsız Hız Kontrolü:** Fare tekerleğiyle odaklı yakınlaştırma, iki parmakla yumuşak kaydırma (`pan`) ve `Alt + Wheel` ile 1.5° hassasiyetle mikro açılama.
-* **Görünüm Sınırlandırması (`clampPan`):** Resmin ekrandan uçup kaybolmasını engelleyen dinamik çerçeve sınırları.
+### 2. Mac Kalitesinde Touchpad & Mouse Ergonomisi (1:1 macOS Deneyimi)
+Linux masaüstündeki en büyük eksikliklerden biri olan "kaba veya kontrolsüz dokunmatik tepkileri" tamamen çözüldü. OmaStudio, **Apple Magic Trackpad ve macOS tuval ergonomisiyle 1:1 aynı hissi** sunar:
+* **İki Parmak Çimdik Yakınlaştırma (Pinch-to-Zoom):** İmlecin veya parmakların odaklandığı piksel merkezine kesintisiz, logaritmik ve sıçramasız yakınlaştırma.
+* **Akıllı Rotasyon & 3.5° Ölü Bölge (Deadzone):** Fotoğrafı yakınlaştırırken parmakların istemsizce kayıp resmi eğmesini engelleyen akıllı deadzone filtresi; bilinçli döndürmelerde ise 360° serbest tuval çevirme.
+* **İki Parmak Akıcı Kaydırma (Kinetik Pan):** Yakınlaştırılmış fotoğrafta Mac'teki gibi pürüzsüz süzülme (`0.75` sönümlenmiş kinetik sürtünme).
+* **Çift Tıklama / Çift Dokunma (Double-Tap):** Ekrana sığdırma (%100 Fit) ile %200 piksel seviyesi detay inceleme arasında anında geçiş ve açıyı sıfırlama.
+* **Fare & Touchpad Ayrımı (`WheelHandler`):** Fare tekerleği imleç odaklı logaritmik zum yaparken, touchpad iki parmakla kaydırmada yumuşak pan yapar; `Alt + Wheel` ise 1.5° hassasiyetle mikro açı düzeltmesi sağlar.
+* **Uçup Kaybolmayı Önleyen Sınırlandırma (`clampPan`):** Resmin hızlı hareketlerde ekrandan kaybolmasını önleyen akıllı kenar çıpaları.
 
 ### 3. Modül Bazlı Bağımsız "Reset" & Çift Seviyeli Arayüz
 * **Basit Mod (Hızlı İş Akışı):** Tek tıkla YZ Otomatik İyileştirme ve 4 temel sürgü (Pozlama, Sıcaklık, Canlılık, Kontrast).
