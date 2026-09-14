@@ -303,6 +303,31 @@ Rectangle {
 
         Item { Layout.fillWidth: true }
 
+        // Buy Me a Coffee / Sponsor Button
+        Rectangle {
+            implicitWidth: 32
+            implicitHeight: 28
+            radius: Theme.radiusSm
+            color: mouseCoffee.containsMouse ? Qt.rgba(1.0, 0.86, 0.0, 0.25) : Qt.rgba(1.0, 0.86, 0.0, 0.12)
+            border.color: mouseCoffee.containsMouse ? "#FFDD00" : Qt.rgba(1.0, 0.86, 0.0, 0.3)
+            border.width: 1
+
+            Text {
+                anchors.centerIn: parent
+                text: "☕"
+                textFormat: Text.PlainText
+                font.pixelSize: 13
+            }
+
+            MouseArea {
+                id: mouseCoffee
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: Qt.openUrlExternally("https://buymeacoffee.com/ozdil")
+            }
+        }
+
         // Open Photo Button
         Rectangle {
             implicitWidth: 92

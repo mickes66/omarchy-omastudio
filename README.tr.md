@@ -11,6 +11,7 @@
 [![Engine: Rust](https://img.shields.io/badge/Engine-Rust%202021%20%28Rayon%29-dea584.svg)](Cargo.toml)
 [![UI: Quickshell](https://img.shields.io/badge/UI-Quickshell%20%7C%20Qt%206-41cd52.svg)](qml/)
 [![Security: AGENTS.md Compliant](https://img.shields.io/badge/Security-AGENTS.md%20Mode%200600-brightgreen.svg)](AGENTS.md)
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy_Me_A_Coffee-Destek_Ol-FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/ozdil)
 
 ![OmaStudio Preview](preview.png)
 
@@ -172,6 +173,14 @@ OmaStudio, Omarchy Linux resmi güvenlik kılavuzuna koşulsuz olarak uyar:
 2. **Korumalı Dosya İzinleri (`0600` / `0700`):** Fotoğraf katalogları ve ayarlar `0600` izniyle atomik olarak yazılır (`.tmp_...` + `fs::rename`); symlink saldırıları sıkıca reddedilir.
 3. **Quickshell Güvenliği:** Dinamik veriler `textFormat: Text.PlainText` ile gösterilir; dinamik `eval()` veya `createQmlObject()` bulunmaz.
 4. **Argüman Enjeksiyonu Koruması:** Sistem komutları asla kabuk dizesi ile çalıştırılmaz, ayrık bağımsız argüman dilimleri ve `--` sınırlayıcısı kullanılır.
+
+---
+
+## ☕ Destek & Sponsorluk
+
+OmaStudio'yu faydalı buluyorsanız ve bağımsız açık kaynak Linux yazılım geliştirmesine katkıda bulunmak isterseniz:
+
+<a href="https://buymeacoffee.com/ozdil" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 50px !important;width: 180px !important;" ></a>
 
 ---
 

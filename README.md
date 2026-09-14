@@ -11,6 +11,7 @@
 [![Engine: Rust](https://img.shields.io/badge/Engine-Rust%202021%20%28Rayon%29-dea584.svg)](Cargo.toml)
 [![UI: Quickshell](https://img.shields.io/badge/UI-Quickshell%20%7C%20Qt%206-41cd52.svg)](qml/)
 [![Security: AGENTS.md Compliant](https://img.shields.io/badge/Security-AGENTS.md%20Mode%200600-brightgreen.svg)](AGENTS.md)
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy_Me_A_Coffee-Support_Development-FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/ozdil)
 
 ![OmaStudio Preview](preview.png)
 
@@ -172,6 +173,14 @@ OmaStudio strictly conforms to the Omarchy Linux Security Standards:
 2. **Protected File Permissions (`0600` / `0700`):** Catalogs and configuration are written atomically (`.tmp_...` + `fs::rename`) with mode `0600`; symlink traversals are rejected.
 3. **Quickshell Hardening:** Dynamic strings are rendered with `textFormat: Text.PlainText`; dynamic `eval()` and `createQmlObject()` are strictly prohibited.
 4. **Argument Injection Defense:** System utilities are invoked with discrete argument vectors and the `--` delimiter to block flag injection.
+
+---
+
+## ☕ Support & Sponsorship
+
+If you find OmaStudio valuable and want to fuel independent Linux software development:
+
+<a href="https://buymeacoffee.com/ozdil" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 50px !important;width: 180px !important;" ></a>
 
 ---
 
