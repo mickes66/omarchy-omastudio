@@ -100,3 +100,22 @@ Bu belge, Omarchy Linux ekosistemi için geliştirilen tüm yerel uygulamalarda,
   - Süreç zaman aşımında `SIGTERM`'i yok sayan ve `stdout`'u açık tutan torun süreçlerin dahi mutlak deadline içinde yok edildiğinin testi.
   - Hassas dosyaların `0600` izninin, symlink reddinin ve atomik yazımının testi.
   - Hatalı veya güvenilmeyen girdilerde panik yaşanmadan temiz `None` veya `Err` dönüldüğünün testi.
+
+---
+
+## 7. Geliştirici Desteği ve Fonlama Standartları (Funding & Sponsorship Architecture)
+
+1. **Zorunlu GitHub Fonlama Yapılandırması (`.github/FUNDING.yml`)**:
+   - Omarchy Linux ekosistemindeki tüm depolarda `.github/FUNDING.yml` dosyası istisnasız bulunmalıdır:
+     ```yaml
+     buy_me_a_coffee: ozdil
+     custom: ['https://buymeacoffee.com/ozdil']
+     ```
+2. **README Rozet ve Destek Bölümü**:
+   - Proje `README.md` başlığının hemen altına resmi Buy Me a Coffee rozeti eklenmelidir:
+     ```markdown
+     [![Buy Me A Coffee](https://img.shields.io/badge/Buy_Me_A_Coffee-Support_Development-FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/ozdil)
+     ```
+   - Lisans bölümünden önce resmi `Support & Sponsorship` başlığı ve buton görseli (`https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png`) yer almalıdır.
+3. **Masaüstü ve Web Arayüzü Buton Standartları**:
+   - QML / Quickshell panellerinde veya web arayüzlerinde geliştiriciye destek butonu (`☕`) yer almalı; `#FFDD00` altın sarısı vurgu rengiyle `Qt.openUrlExternally("https://buymeacoffee.com/ozdil")` tetiklenmelidir.
