@@ -133,10 +133,13 @@ Platform-tailored resolution, aspect ratios, and micro-contrast presets engineer
 
 ## 🚀 Installation & Usage
 
-### Dependencies (Arch / Omarchy Linux)
-```bash
-sudo pacman -S libraw quickshell rclone libjxl libavif zenity rust
-```
+### System Requirements & Dependencies
+* `libraw` (RAW image decoding engine)
+* `quickshell` (Qt 6 QML desktop shell runtime)
+* `rclone` (Google Drive and cloud storage synchronization)
+* `libjxl` & `libavif` (Modern hardware-accelerated image codecs)
+* `zenity` (Native file selection dialogs)
+* `rust` (Toolchain for compiling the native engine)
 
 ### Build & Local Installation
 ```bash

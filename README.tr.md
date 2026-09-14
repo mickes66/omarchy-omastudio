@@ -133,10 +133,13 @@ Platforma özel çözünürlük, en boy oranı ve algoritma sıkıştırma kayı
 
 ## 🚀 Kurulum & Çalıştırma
 
-### Bağımlılıklar (Arch / Omarchy Linux)
-```bash
-sudo pacman -S libraw quickshell rclone libjxl libavif zenity rust
-```
+### Sistem Gereksinimleri ve Bağımlılıklar
+* `libraw` (RAW görsel çözme motoru)
+* `quickshell` (Qt 6 QML masaüstü kabuk çalışma zamanı)
+* `rclone` (Google Drive ve bulut depolama senkronizasyonu)
+* `libjxl` & `libavif` (Donanım hızlandırmalı modern görsel kodekleri)
+* `zenity` (Yerel dosya seçim pencereleri)
+* `rust` (Yerel motorun derlenmesi için araç zinciri)
 
 ### Derleme & Yerel Kurulum
 ```bash
