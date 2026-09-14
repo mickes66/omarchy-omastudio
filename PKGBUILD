@@ -30,6 +30,8 @@ package() {
     
     install -d "$pkgdir/usr/share/omastudio"
     cp -r qml "$pkgdir/usr/share/omastudio/"
+    install -Dm644 omastudio.desktop "$pkgdir/usr/share/applications/omastudio.desktop"
+    ln -sf "omastudio.desktop" "$pkgdir/usr/share/applications/omaraw.desktop"
     install -Dm644 manifest.json "$pkgdir/usr/share/omastudio/manifest.json"
     install -Dm644 README.md "$pkgdir/usr/share/doc/omastudio/README.md"
 }

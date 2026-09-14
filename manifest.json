@@ -6,7 +6,7 @@
   "version": "1.0.0",
   "author": "Ozan Özdil",
   "license": "MIT",
-  "kinds": ["app", "bar-widget"],
+  "kinds": ["app"],
   "entryPoints": {
     "app": "qml/shell.qml"
   },
