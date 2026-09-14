@@ -9,8 +9,10 @@ ShellRoot {
     FloatingWindow {
         id: win
         title: "OmaStudio - Lightroom-Grade Photo RAW Editor"
-        implicitWidth: 1360
-        implicitHeight: 860
+        width: 1440
+        height: 920
+        implicitWidth: 1440
+        implicitHeight: 920
         color: Theme.bgBase
 
         MainWindow {
