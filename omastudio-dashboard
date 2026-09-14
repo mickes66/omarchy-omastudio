@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Try quickshell IPC first if running
+if [[ "${1:-}" != "--cli" ]] && command -v quickshell >/dev/null 2>&1; then
+    if quickshell ipc call ozdil.omastudio toggle >/dev/null 2>&1; then
+        exit 0
+    fi
+fi
+
+DIR="$(cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")" && pwd)"
+exec "${DIR}/omastudio" "$@"

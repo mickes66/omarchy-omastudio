@@ -1,0 +1,35 @@
+# Maintainer: Ozan Özdil
+pkgname=omastudio
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="Lightroom-grade Open-Source RAW Photo Editor for Omarchy Linux with Google Drive & AI"
+arch=('x86_64')
+url="https://github.com/ozdil/omarchy-omastudio"
+license=('MIT')
+depends=('libraw' 'quickshell' 'rclone' 'libjxl' 'libavif' 'zenity')
+makedepends=('rust' 'cargo' 'pkgconf' 'clang')
+source=()
+sha256sums=()
+
+build() {
+    cd "$startdir"
+    cargo build --release --locked
+}
+
+check() {
+    cd "$startdir"
+    cargo test --release --locked
+}
+
+package() {
+    cd "$startdir"
+    install -Dm755 "target/release/omastudio-engine" "$pkgdir/usr/bin/omastudio-engine"
+    install -Dm755 "omastudio" "$pkgdir/usr/bin/omastudio"
+    ln -sf "omastudio-engine" "$pkgdir/usr/bin/omaraw-engine"
+    ln -sf "omastudio" "$pkgdir/usr/bin/omaraw"
+    
+    install -d "$pkgdir/usr/share/omastudio"
+    cp -r qml "$pkgdir/usr/share/omastudio/"
+    install -Dm644 manifest.json "$pkgdir/usr/share/omastudio/manifest.json"
+    install -Dm644 README.md "$pkgdir/usr/share/doc/omastudio/README.md"
+}

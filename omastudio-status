@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+DIR="$(cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")" && pwd)"
+BIN="${DIR}/target/release/omastudio-engine"
+
+# Check standard install path first
+if [[ -x "${HOME}/.local/bin/omastudio-engine" ]]; then
+    exec "${HOME}/.local/bin/omastudio-engine" status
+fi
+
+# Fallback to local build directory
+if [[ ! -x "${BIN}" ]]; then
+    if command -v cargo >/dev/null 2>&1 && [[ -f "${DIR}/Cargo.toml" ]]; then
+        (cd "${DIR}" && cargo build --release --locked && install -d -m 755 "${HOME}/.local/bin" && install -m 755 target/release/omastudio-engine "${HOME}/.local/bin/omastudio-engine") >/dev/null 2>&1 || true
+    fi
+fi
+
+if [[ -x "${BIN}" ]]; then
+    exec "${BIN}" status
+else
+    echo '{"text":"OMASTUDIO: OFFLINE","tooltip":"Engine binary not found (run cargo build --release)","class":"alert"}'
+fi

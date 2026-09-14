@@ -1,0 +1,254 @@
+pub mod ffi;
+
+use ffi::*;
+use serde::{Deserialize, Serialize};
+use std::ffi::{CStr, CString};
+use std::path::{Path, PathBuf};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RawMetadata {
+    pub width: u32,
+    pub height: u32,
+    pub raw_width: u32,
+    pub raw_height: u32,
+    pub make: String,
+    pub model: String,
+    pub lens: String,
+    pub iso: f32,
+    pub shutter: f32,
+    pub aperture: f32,
+    pub focal_length: f32,
+    pub timestamp: i64,
+    pub cam_mul: [f32; 4],
+}
+
+pub struct ProcessedBuffer {
+    ptr: *mut u8,
+    pub width: u32,
+    pub height: u32,
+    pub channels: u32,
+    pub data_size: usize,
+}
+
+// SAFETY: The buffer is exclusively owned and safe to pass across threads
+unsafe impl Send for ProcessedBuffer {}
+unsafe impl Sync for ProcessedBuffer {}
+
+impl ProcessedBuffer {
+    pub fn as_slice(&self) -> &[u8] {
+        if self.ptr.is_null() || self.data_size == 0 {
+            &[]
+        } else {
+            // SAFETY: ptr points to valid heap memory of data_size allocated by C shim
+            unsafe { std::slice::from_raw_parts(self.ptr, self.data_size) }
+        }
+    }
+
+    pub fn to_vec(&self) -> Vec<u8> {
+        self.as_slice().to_vec()
+    }
+}
+
+impl Drop for ProcessedBuffer {
+    fn drop(&mut self) {
+        if !self.ptr.is_null() {
+            // SAFETY: ptr was allocated by malloc in C shim and is freed here
+            unsafe {
+                omaraw_free_image(self.ptr);
+            }
+            self.ptr = std::ptr::null_mut();
+        }
+    }
+}
+
+pub struct RawImage {
+    // Path accessor
+    handle: *mut std::os::raw::c_void,
+    path: PathBuf,
+}
+
+// SAFETY: RawImage handle is managed exclusively by Rust wrapper
+unsafe impl Send for RawImage {}
+
+impl RawImage {
+    pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, String> {
+        let path_ref = path.as_ref();
+        crate::security::verify_safe_file(path_ref)
+            .map_err(|e| format!("Security check failed for {}: {}", path_ref.display(), e))?;
+
+        let c_path = CString::new(path_ref.to_string_lossy().as_bytes())
+            .map_err(|e| format!("Invalid path string: {}", e))?;
+
+        let mut errcode: std::os::raw::c_int = 0;
+        // SAFETY: c_path is a null-terminated C string, errcode is a valid pointer
+        let handle = unsafe { omaraw_open(c_path.as_ptr(), &mut errcode) };
+
+        if handle.is_null() {
+            return Err(format!("LibRaw failed to open {}: code {}", path_ref.display(), errcode));
+        }
+
+        Ok(Self {
+            handle,
+            path: path_ref.to_path_buf(),
+        })
+    }
+
+    pub fn get_metadata(&self) -> Result<RawMetadata, String> {
+        let mut cmeta = COmaRawMetadata {
+            width: 0,
+            height: 0,
+            raw_width: 0,
+            raw_height: 0,
+            make: [0; 64],
+            model: [0; 64],
+            lens: [0; 128],
+            iso: 0.0,
+            shutter: 0.0,
+            aperture: 0.0,
+            focal_len: 0.0,
+            timestamp: 0,
+            cam_mul: [1.0, 1.0, 1.0, 1.0],
+        };
+
+        // SAFETY: handle is valid and cmeta is allocated on stack
+        let ret = unsafe { omaraw_get_metadata(self.handle, &mut cmeta) };
+        if ret != 0 {
+            return Err("Failed to extract metadata from RAW file".to_string());
+        }
+
+        let make = unsafe { CStr::from_ptr(cmeta.make.as_ptr()) }
+            .to_string_lossy()
+            .trim()
+            .to_string();
+        let model = unsafe { CStr::from_ptr(cmeta.model.as_ptr()) }
+            .to_string_lossy()
+            .trim()
+            .to_string();
+        let lens = unsafe { CStr::from_ptr(cmeta.lens.as_ptr()) }
+            .to_string_lossy()
+            .trim()
+            .to_string();
+
+        Ok(RawMetadata {
+            width: cmeta.width.max(0) as u32,
+            height: cmeta.height.max(0) as u32,
+            raw_width: cmeta.raw_width.max(0) as u32,
+            raw_height: cmeta.raw_height.max(0) as u32,
+            make,
+            model,
+            lens,
+            iso: cmeta.iso,
+            shutter: cmeta.shutter,
+            aperture: cmeta.aperture,
+            focal_length: cmeta.focal_len,
+            timestamp: cmeta.timestamp,
+            cam_mul: cmeta.cam_mul,
+        })
+    }
+
+    pub fn extract_thumbnail<P: AsRef<Path>>(&self, dest_path: P) -> Result<(), String> {
+        let dest = dest_path.as_ref();
+        if let Some(parent) = dest.parent() {
+            crate::security::ensure_secure_dir(parent)
+                .map_err(|e| format!("Failed to ensure thumbnail directory: {}", e))?;
+        }
+
+        let c_dest = CString::new(dest.to_string_lossy().as_bytes())
+            .map_err(|e| format!("Invalid destination path: {}", e))?;
+
+        // SAFETY: handle is valid, c_dest is valid C string
+        let ret = unsafe { omaraw_extract_thumb_file(self.handle, c_dest.as_ptr()) };
+        if ret != 0 {
+            return Err(format!("Failed to extract embedded thumbnail: code {}", ret));
+        }
+
+        Ok(())
+    }
+
+    pub fn process_preview(&self, half_size: bool) -> Result<ProcessedBuffer, String> {
+        let mut out_w = 0;
+        let mut out_h = 0;
+        let mut out_colors = 0;
+        let mut out_size = 0;
+
+        let hs = if half_size { 1 } else { 0 };
+        // Fast demosaic for viewport: quality 0 (linear) or 1
+        // SAFETY: handle is valid, all output pointers point to stack variables
+        let ptr = unsafe {
+            omaraw_process_image(
+                self.handle,
+                hs,
+                0,
+                8,
+                &mut out_w,
+                &mut out_h,
+                &mut out_colors,
+                &mut out_size,
+            )
+        };
+
+        if ptr.is_null() || out_size <= 0 {
+            return Err("Failed to process RAW preview".to_string());
+        }
+
+        Ok(ProcessedBuffer {
+            ptr,
+            width: out_w.max(0) as u32,
+            height: out_h.max(0) as u32,
+            channels: out_colors.max(0) as u32,
+            data_size: out_size.max(0) as usize,
+        })
+    }
+
+    pub fn process_full(&self, quality: i32) -> Result<ProcessedBuffer, String> {
+        let mut out_w = 0;
+        let mut out_h = 0;
+        let mut out_colors = 0;
+        let mut out_size = 0;
+
+        // High quality demosaicing (AHD / DHT): quality = 3
+        // SAFETY: handle is valid, all output pointers point to stack variables
+        let ptr = unsafe {
+            omaraw_process_image(
+                self.handle,
+                0,
+                quality,
+                8,
+                &mut out_w,
+                &mut out_h,
+                &mut out_colors,
+                &mut out_size,
+            )
+        };
+
+        if ptr.is_null() || out_size <= 0 {
+            return Err("Failed to demosaic full resolution RAW".to_string());
+        }
+
+        Ok(ProcessedBuffer {
+            ptr,
+            width: out_w.max(0) as u32,
+            height: out_h.max(0) as u32,
+            channels: out_colors.max(0) as u32,
+            data_size: out_size.max(0) as usize,
+        })
+    }
+}
+
+impl Drop for RawImage {
+    fn drop(&mut self) {
+        if !self.handle.is_null() {
+            // SAFETY: handle was opened by omaraw_open and is cleanly released here
+            unsafe {
+                omaraw_close(self.handle);
+            }
+            self.handle = std::ptr::null_mut();
+        }
+    }
+}
+
+impl RawImage {
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+}

@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+DIR="$(cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")" && pwd)"
+BIN="${HOME}/.local/bin/omastudio-engine"
+
+# Ensure binary exists or build it
+if [[ ! -x "${BIN}" ]]; then
+    if [[ -f "${DIR}/target/release/omastudio-engine" ]]; then
+        install -d -m 755 "${HOME}/.local/bin"
+        install -m 755 "${DIR}/target/release/omastudio-engine" "${BIN}"
+    elif command -v cargo >/dev/null 2>&1 && [[ -f "${DIR}/Cargo.toml" ]]; then
+        echo "Building omastudio-engine from source..."
+        (cd "${DIR}" && cargo build --release --locked && install -d -m 755 "${HOME}/.local/bin" && install -m 755 target/release/omastudio-engine "${BIN}") || true
+    fi
+fi
+
+
+# If CLI arguments passed or --cli flag requested, delegate to binary
+if [[ "${1:-}" == "--cli" ]]; then
+    shift
+    exec "${BIN}" "$@"
+elif [[ "${1:-}" == "ipc" ]]; then
+    shift
+    if [[ "${1:-}" == "show" ]]; then
+        exec quickshell ipc -p "${DIR}/qml/shell.qml" show
+    elif [[ "${1:-}" == "call" ]]; then
+        shift
+        exec quickshell ipc -p "${DIR}/qml/shell.qml" call ozdil.omastudio "$@"
+    else
+        exec quickshell ipc -p "${DIR}/qml/shell.qml" call ozdil.omastudio "$@"
+    fi
+elif [[ "${1:-}" == "--help" || "${1:-}" == "-h" || "${1:-}" == "help" ]]; then
+    exec "${BIN}" help
+elif [[ "${1:-}" == "--version" || "${1:-}" == "-v" || "${1:-}" == "version" ]]; then
+    exec "${BIN}" version
+elif [[ "${1:-}" == "--status" || "${1:-}" == "status" ]]; then
+    exec "${BIN}" status
+elif [[ "${1:-}" == "theme" ]]; then
+    shift
+    if [[ "${1:-}" == "reload" ]] && command -v quickshell >/dev/null 2>&1; then
+        exec quickshell ipc -p "${DIR}/qml/shell.qml" call ozdil.omastudio reloadTheme
+    elif [[ "${1:-}" == "get" ]] && command -v quickshell >/dev/null 2>&1; then
+        exec quickshell ipc -p "${DIR}/qml/shell.qml" call ozdil.omastudio getTheme
+    else
+        exec "${BIN}" theme "$@"
+    fi
+elif [[ $# -gt 0 ]]; then
+    # Check if first arg is an engine subcommand
+    case "${1:-}" in
+        inspect|render|export|ai-auto|ai-social|icc|gdrive|scan|catalog|daemon|theme)
+            exec "${BIN}" "$@"
+            ;;
+        *)
+            # If it's a file path and quickshell is already running, load via IPC
+            if [[ -f "${1:-}" ]] && command -v quickshell >/dev/null 2>&1; then
+                if quickshell ipc call ozdil.omastudio openPhoto "$(realpath "$1")" >/dev/null 2>&1; then
+                    echo "Loaded photo in running OmaStudio instance: $1"
+                    exit 0
+                fi
+            fi
+            ;;
+    esac
+fi
+
+# Try quickshell IPC toggle if already running and no args passed
+if [[ $# -eq 0 ]] && command -v quickshell >/dev/null 2>&1; then
+    if quickshell ipc call ozdil.omastudio toggle >/dev/null 2>&1; then
+        exit 0
+    fi
+fi
+
+# Otherwise launch Quickshell Studio UI
+if command -v quickshell >/dev/null 2>&1; then
+    exec quickshell -p "${DIR}/qml/shell.qml"
+else
+    echo "Quickshell is not found on PATH. Falling back to omastudio-engine CLI."
+    exec "${BIN}" help
+fi

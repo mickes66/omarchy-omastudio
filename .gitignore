@@ -1,0 +1,9 @@
+target/
+**/*.rs.bk
+*.ppm
+*.tmp_*
+.cache/
+omastudio-engine
+omaraw-engine
+*.iso
+*.tar.gz

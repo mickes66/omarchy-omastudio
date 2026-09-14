@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "ozdil.omastudio",
+  "name": "OmaStudio",
+  "description": "Lightroom-Grade Open-Source Photo RAW Editor for Omarchy Linux with Google Drive & AI",
+  "version": "1.0.0",
+  "author": "Ozan Özdil",
+  "license": "MIT",
+  "kinds": ["app", "bar-widget"],
+  "entryPoints": {
+    "app": "qml/shell.qml"
+  },
+  "supportedFormats": [
+    "NEF", "NRW", "RAF", "CR2", "CR3", "ARW", "SR2", "DNG", "RWL", "ORF", "RW2"
+  ]
+}

@@ -1,0 +1,116 @@
+import QtQuick
+import Quickshell
+import Quickshell.Io
+import "theme"
+
+ShellRoot {
+    id: shellRoot
+
+    FloatingWindow {
+        id: win
+        title: "OmaStudio - Lightroom-Grade Photo RAW Editor"
+        implicitWidth: 1360
+        implicitHeight: 860
+        color: Theme.bgBase
+
+        MainWindow {
+            id: mainWin
+            anchors.fill: parent
+        }
+    }
+
+    // Omarchy Agent & CLI IPC Interface (Strict Type Safety & Sandboxed Execution)
+    IpcHandler {
+        target: "ozdil.omastudio"
+
+        function toggle(): bool {
+            win.visible = !win.visible;
+            return win.visible;
+        }
+
+        function openPhoto(rawPath: string): string {
+            if (!rawPath || rawPath.length === 0) return "Error: empty photo path";
+            mainWin.loadPhoto(rawPath);
+            return "OK";
+        }
+
+        function applyRecipe(recipeJson: string): string {
+            if (!recipeJson || recipeJson.length === 0) return "Error: empty recipe json";
+            try {
+                var r = JSON.parse(recipeJson);
+                mainWin.applyRecipeObject(r);
+                return "OK";
+            } catch(e) {
+                return "Error: " + e;
+            }
+        }
+
+        function optimizeSocial(platformCode: string): string {
+            if (!platformCode || platformCode.length === 0) return "Error: empty platform code";
+            mainWin.triggerSocial(platformCode);
+            return "OK";
+        }
+
+        function applyPreset(presetName: string): string {
+            if (!presetName || presetName.length === 0) return "Error: empty preset name";
+            mainWin.applyPresetNamed(presetName);
+            return "OK";
+        }
+
+        function setExposure(ev: real): string {
+            mainWin.setExposureEv(ev);
+            return "OK";
+        }
+
+        function setWarmth(kelvin: real): string {
+            mainWin.setWarmthKelvin(kelvin);
+            return "OK";
+        }
+
+        function reset(): string {
+            mainWin.resetRecipe();
+            return "OK";
+        }
+
+        function toggleCrop(): bool {
+            return mainWin.toggleCropMode();
+        }
+
+        function toggleSplit(): bool {
+            return mainWin.toggleSplitView();
+        }
+
+        function reloadTheme(): string {
+            return Theme.reloadTheme();
+        }
+
+        function getTheme(): string {
+            var t = {
+                "name": Theme.themeName,
+                "isDark": Theme.isDarkTheme,
+                "bgBase": Theme.bgBase.toString(),
+                "bgDark": Theme.bgDark.toString(),
+                "bgSurface": Theme.bgSurface.toString(),
+                "accent": Theme.accent.toString(),
+                "accentGreen": Theme.accentGreen.toString(),
+                "textMain": Theme.textMain.toString()
+            };
+            return JSON.stringify(t);
+        }
+
+        function getStatus(): string {
+            var s = {
+                "app": "OmaStudio",
+                "activePhoto": mainWin.activePhotoPath,
+                "theme": Theme.themeName,
+                "themeMode": Theme.isDarkTheme ? "dark" : "light",
+                "isProMode": mainWin.isProMode,
+                "isSplitView": mainWin.isSplitView,
+                "windowVisible": win.visible,
+                "recipe": mainWin.buildRecipeObject()
+            };
+            return JSON.stringify(s);
+        }
+    }
+}
+
