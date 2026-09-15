@@ -11,14 +11,53 @@ ColumnLayout {
 
     signal applyPreset(string name)
     signal triggerAiAuto()
+    signal resetPreset()
 
-    Text {
-        text: "FILM LOOKS & STYLES"
-        textFormat: Text.PlainText
-        font.pixelSize: 10
-        font.weight: Font.DemiBold
-        font.letterSpacing: 1
-        color: Theme.textDim
+    RowLayout {
+        Layout.fillWidth: true
+        spacing: 4
+
+        Text {
+            text: "FILM LOOKS & STYLES"
+            textFormat: Text.PlainText
+            font.pixelSize: 10
+            font.weight: Font.DemiBold
+            font.letterSpacing: 1
+            color: Theme.textDim
+            Layout.fillWidth: true
+        }
+
+        // Reset preset button
+        Rectangle {
+            visible: root.activePreset !== ""
+            implicitWidth: 42
+            implicitHeight: 16
+            radius: Theme.radiusSm
+            color: "transparent"
+            border.color: Theme.textDim
+            border.width: 1
+
+            Text {
+                anchors.centerIn: parent
+                text: "RESET"
+                textFormat: Text.PlainText
+                font.pixelSize: 8
+                font.weight: Font.DemiBold
+                color: Theme.textDim
+            }
+
+            MouseArea {
+                anchors.fill: parent
+                cursorShape: Qt.PointingHandCursor
+                hoverEnabled: true
+                onEntered: parent.border.color = Theme.accentMagenta
+                onExited: parent.border.color = Theme.textDim
+                onClicked: {
+                    root.activePreset = ""
+                    root.resetPreset()
+                }
+            }
+        }
     }
 
     // AI Auto Card (Special Highlight)

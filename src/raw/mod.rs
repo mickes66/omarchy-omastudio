@@ -27,6 +27,7 @@ pub struct ProcessedBuffer {
     pub width: u32,
     pub height: u32,
     pub channels: u32,
+    pub bits_per_sample: u32,
     pub data_size: usize,
 }
 
@@ -46,6 +47,23 @@ impl ProcessedBuffer {
 
     pub fn to_vec(&self) -> Vec<u8> {
         self.as_slice().to_vec()
+    }
+
+    pub fn as_slice_u16(&self) -> &[u16] {
+        if self.ptr.is_null() || self.data_size < 2 {
+            &[]
+        } else {
+            // SAFETY: ptr was allocated by malloc in C shim, which is aligned to at least 8/16 bytes,
+            // satisfying the 2-byte alignment required for u16. data_size contains exactly
+            // (data_size / 2) u16 values when bits_per_sample == 16.
+            unsafe {
+                std::slice::from_raw_parts(self.ptr as *const u16, self.data_size / 2)
+            }
+        }
+    }
+
+    pub fn to_vec_u16(&self) -> Vec<u16> {
+        self.as_slice_u16().to_vec()
     }
 }
 
@@ -165,21 +183,20 @@ impl RawImage {
         Ok(())
     }
 
-    pub fn process_preview(&self, half_size: bool) -> Result<ProcessedBuffer, String> {
+    pub fn process_custom(&self, half_size: bool, quality: i32, bps: i32) -> Result<ProcessedBuffer, String> {
         let mut out_w = 0;
         let mut out_h = 0;
         let mut out_colors = 0;
         let mut out_size = 0;
 
         let hs = if half_size { 1 } else { 0 };
-        // Fast demosaic for viewport: quality 0 (linear) or 1
         // SAFETY: handle is valid, all output pointers point to stack variables
         let ptr = unsafe {
             omaraw_process_image(
                 self.handle,
                 hs,
-                0,
-                8,
+                quality,
+                bps,
                 &mut out_w,
                 &mut out_h,
                 &mut out_colors,
@@ -188,7 +205,7 @@ impl RawImage {
         };
 
         if ptr.is_null() || out_size <= 0 {
-            return Err("Failed to process RAW preview".to_string());
+            return Err("Failed to process RAW image".to_string());
         }
 
         Ok(ProcessedBuffer {
@@ -196,42 +213,25 @@ impl RawImage {
             width: out_w.max(0) as u32,
             height: out_h.max(0) as u32,
             channels: out_colors.max(0) as u32,
+            bits_per_sample: if bps == 16 { 16 } else { 8 },
             data_size: out_size.max(0) as usize,
         })
     }
 
+    pub fn process_preview(&self, half_size: bool) -> Result<ProcessedBuffer, String> {
+        self.process_custom(half_size, 0, 8)
+    }
+
+    pub fn process_preview_16(&self, half_size: bool) -> Result<ProcessedBuffer, String> {
+        self.process_custom(half_size, 0, 16)
+    }
+
     pub fn process_full(&self, quality: i32) -> Result<ProcessedBuffer, String> {
-        let mut out_w = 0;
-        let mut out_h = 0;
-        let mut out_colors = 0;
-        let mut out_size = 0;
+        self.process_custom(false, quality, 8)
+    }
 
-        // High quality demosaicing (AHD / DHT): quality = 3
-        // SAFETY: handle is valid, all output pointers point to stack variables
-        let ptr = unsafe {
-            omaraw_process_image(
-                self.handle,
-                0,
-                quality,
-                8,
-                &mut out_w,
-                &mut out_h,
-                &mut out_colors,
-                &mut out_size,
-            )
-        };
-
-        if ptr.is_null() || out_size <= 0 {
-            return Err("Failed to demosaic full resolution RAW".to_string());
-        }
-
-        Ok(ProcessedBuffer {
-            ptr,
-            width: out_w.max(0) as u32,
-            height: out_h.max(0) as u32,
-            channels: out_colors.max(0) as u32,
-            data_size: out_size.max(0) as usize,
-        })
+    pub fn process_full_16(&self, quality: i32) -> Result<ProcessedBuffer, String> {
+        self.process_custom(false, quality, 16)
     }
 }
 

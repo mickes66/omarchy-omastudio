@@ -1,5 +1,5 @@
 use crate::gdrive::upload_export_to_gdrive;
-use crate::pipeline::process_buffer;
+use crate::pipeline::process_buffer_16_to_16;
 use crate::raw::RawImage;
 use crate::recipe::Recipe;
 use crate::security::{run_bounded_command, secure_command};
@@ -50,12 +50,12 @@ pub fn export_photo<P: AsRef<Path>>(
     let raw = RawImage::open(&raw_path)
         .map_err(|e| format!("Could not open RAW for export: {}", e))?;
 
-    // Demosaic at high quality
-    let processed = raw.process_full(3)
-        .map_err(|e| format!("Failed to demosaic full resolution: {}", e))?;
+    // Demosaic at high quality with full 16-bit depth (48-bit RGB)
+    let processed = raw.process_full_16(3)
+        .map_err(|e| format!("Failed to demosaic full resolution 16-bit: {}", e))?;
 
-    let (final_buf, _) = process_buffer(
-        processed.as_slice(),
+    let (final_buf, _) = process_buffer_16_to_16(
+        processed.as_slice_u16(),
         processed.width,
         processed.height,
         processed.channels,
@@ -65,10 +65,10 @@ pub fn export_photo<P: AsRef<Path>>(
     let width = processed.width;
     let height = processed.height;
 
-    // Convert to ImageBuffer
-    let img: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::from_raw(width, height, final_buf)
-        .ok_or_else(|| "Failed to construct ImageBuffer from processed data".to_string())?;
-    let mut dyn_img = DynamicImage::ImageRgb8(img);
+    // Convert to 16-bit ImageBuffer
+    let img: ImageBuffer<Rgb<u16>, Vec<u16>> = ImageBuffer::from_raw(width, height, final_buf)
+        .ok_or_else(|| "Failed to construct 16-bit ImageBuffer from processed data".to_string())?;
+    let mut dyn_img = DynamicImage::ImageRgb16(img);
 
     // Apply geometric transformations (Rotation / Flip)
     let rot_norm = ((recipe.rotation.round() as i32) % 360 + 360) % 360;
@@ -186,7 +186,8 @@ pub fn export_photo<P: AsRef<Path>>(
         "webp" => {
             let file = fs::File::create(&final_dest)
                 .map_err(|e| format!("Failed to create WebP file: {}", e))?;
-            dyn_img.write_to(&mut std::io::BufWriter::new(file), image::ImageFormat::WebP)
+            let dyn_rgb8 = DynamicImage::ImageRgb8(dyn_img.to_rgb8());
+            dyn_rgb8.write_to(&mut std::io::BufWriter::new(file), image::ImageFormat::WebP)
                 .map_err(|e| format!("Failed to encode WebP: {}", e))?;
         }
         "tiff" | "tif" => {
@@ -199,7 +200,7 @@ pub fn export_photo<P: AsRef<Path>>(
             let file = fs::File::create(&final_dest)
                 .map_err(|e| format!("Failed to create PNG file: {}", e))?;
             dyn_img.write_to(&mut std::io::BufWriter::new(file), image::ImageFormat::Png)
-                .map_err(|e| format!("Failed to encode PNG: {}", e))?;
+                .map_err(|e| format!("Failed to encode 16-bit PNG: {}", e))?;
         }
         "jpeg" | "jpg" => {
             let file = fs::File::create(&final_dest)
@@ -209,7 +210,8 @@ pub fn export_photo<P: AsRef<Path>>(
                 &mut writer,
                 options.quality.clamp(1, 100) as u8,
             );
-            dyn_img.write_with_encoder(encoder)
+            let dyn_rgb8 = DynamicImage::ImageRgb8(dyn_img.to_rgb8());
+            dyn_rgb8.write_with_encoder(encoder)
                 .map_err(|e| format!("Failed to encode JPEG: {}", e))?;
         }
         _ => return Err(format!("Unsupported export format: {}", fmt)),

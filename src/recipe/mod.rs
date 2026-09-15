@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 // time
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
 pub struct Recipe {
     // White Balance
     pub wb_temperature: f32, // 2000K to 12000K (Default: 5500.0)

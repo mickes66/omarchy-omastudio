@@ -32,12 +32,14 @@ graph TD
 
     subgraph IPC ["⚡ Secure Local IPC & CLI Interface"]
         CLI["omastudio --cli"]
-        Sock["Quickshell IPC Protocol<br/>(Strict Types & Non-Blocking)"]
+        Sock["Persistent Daemon IPC (stdin/stdout JSON lines)<br/>& Quickshell IPC Protocol"]
     end
 
     subgraph Engine ["🦀 Background Engine (Rust / Rayon Core)"]
         Decoders["LibRaw FFI Decoder<br/>(Sony ARW, Fuji RAF, Nikon NEF, Canon CR3, DNG)"]
+        RAMCache["Hot RAW Buffer in RAM<br/>(Zero Disk Re-Decoding)"]
         Pipeline["Multi-Core Processing Pipeline<br/>(Parallel Pixel Matrix / Rayon)"]
+        ShmPingPong["Double-Buffered Ping-Pong Shared Memory<br/>(/dev/shm Zero-Flicker Viewport)"]
         ColorEngine["ICC Color Management<br/>(sRGB / AdobeRGB / ProPhoto / Display P3)"]
         AIEngine["AI Scene & Social Media Engine<br/>(Smart Framing / Auto Tone)"]
         Storage["Secure Storage<br/>(Atomic 0600 / GDrive Rclone)"]
@@ -45,10 +47,12 @@ graph TD
 
     UI <--> Sock
     CLI --> Pipeline
-    Sock <--> Engine
-    Decoders --> Pipeline
+    Sock <--> RAMCache
+    Decoders --> RAMCache
+    RAMCache --> Pipeline
+    Pipeline --> ShmPingPong
+    ShmPingPong --> Viewport
     Pipeline --> ColorEngine
-    ColorEngine --> Viewport
     AIEngine --> Pipeline
     Storage <--> Engine
 ```
@@ -159,13 +163,13 @@ omastudio
 ## ⌨️ Keyboard Shortcuts & Workflow
 
 * `Ctrl + O`: Open RAW image dialog
-* `Ctrl + S`: Quick export
+* `Ctrl + S`: Save adjustment recipe sidecar (`.omaraw`, Mode 0600)
 * `C`: Toggle Crop & Composition mode (Rule of Thirds, Golden Ratio, Fibonacci)
-* `Y`: Toggle Split Before / After (A|B) view
-* `Ctrl + Shift + C`: Copy color & tone recipe to clipboard
-* `Ctrl + Shift + V`: Paste recipe onto selected image
-* `Ctrl + R`: Reset all adjustments to defaults
-* `Double Click`: Toggle between 100% Fit and 200% Pixel Inspection
+* `Y`: Toggle Split Before / After (A|B) comparison
+* `Ctrl + Shift + C`: Copy color & tone adjustments to clipboard
+* `Ctrl + Shift + V`: Paste adjustments onto current photo
+* `Ctrl + R`: Reset all adjustments to default values
+* `Double Click`: Toggle between 100% Fit and 200% 1:1 Pixel Inspection
 
 ---
 

@@ -32,12 +32,14 @@ graph TD
 
     subgraph IPC ["⚡ Güvenli Yerel IPC & CLI Arayüzü"]
         CLI["omastudio --cli"]
-        Sock["Quickshell IPC Protokolü<br/>(Strict Types & Non-Blocking)"]
+        Sock["Kalıcı Daemon IPC (stdin/stdout JSON satırları)<br/>& Quickshell IPC Protokolü"]
     end
 
     subgraph Engine ["🦀 Arka Plan Motoru (Rust / Rayon Core)"]
         Decoders["LibRaw FFI Kod Çözücü<br/>(Sony ARW, Fuji RAF, Nikon NEF, Canon CR3, DNG)"]
+        RAMCache["Bellekte Sıcak RAW Matrisi<br/>(Sıfır Disk Yeniden Kod Çözümü)"]
         Pipeline["Çok Çekirdekli İşleme Boru Hattı<br/>(Paralel Piksel Matrisi / Rayon)"]
+        ShmPingPong["Çift Tamponlu Ping-Pong Paylaşılan Bellek<br/>(/dev/shm Sıfır Titreme Önizleme)"]
         ColorEngine["ICC Renk Yönetimi<br/>(sRGB / AdobeRGB / ProPhoto / Display P3)"]
         AIEngine["YZ Sahne ve Sosyal Medya Motoru<br/>(Akıllı Kadraj / Otomatik Tonlama)"]
         Storage["Güvenli Depolama<br/>(Atomik 0600 / GDrive Rclone)"]
@@ -45,10 +47,12 @@ graph TD
 
     UI <--> Sock
     CLI --> Pipeline
-    Sock <--> Engine
-    Decoders --> Pipeline
+    Sock <--> RAMCache
+    Decoders --> RAMCache
+    RAMCache --> Pipeline
+    Pipeline --> ShmPingPong
+    ShmPingPong --> Viewport
     Pipeline --> ColorEngine
-    ColorEngine --> Viewport
     AIEngine --> Pipeline
     Storage <--> Engine
 ```
@@ -159,9 +163,9 @@ omastudio
 ## ⌨️ Klavye ve İş Akışı Kısayolları
 
 * `Ctrl + O`: RAW fotoğraf açma diyaloğu
-* `Ctrl + S`: Hızlı dışa aktarma (Export)
+* `Ctrl + S`: Düzenleme tarifini yan dosya olarak kaydetme (`.omaraw`, Mod 0600)
 * `C`: Kırpma ve Kompozisyon Modu (Üçler, Altın Oran, Fibonacci)
-* `Y`: Öncesi / Sonrası (Split A|B) görünümü
+* `Y`: Öncesi / Sonrası (Split A|B) karşılaştırma
 * `Ctrl + Shift + C`: Tüm renk ve tonlama tarifini panoya kopyalama
 * `Ctrl + Shift + V`: Kopyalanan tarifi seçili fotoğrafa uygulama
 * `Ctrl + R`: Tüm ayarlamaları fabrika çıkışına sıfırlama

@@ -79,6 +79,8 @@ Rectangle {
     property color toastColor: Theme.accent
     property string currentGdrivePath: "Photos"
     property bool isDownloadingRemote: false
+    property bool daemonReady: false
+    property var daemonQueue: []
 
     function resolveEnginePath() {
         return "/home/ozdil/.local/bin/omastudio-engine";
@@ -268,6 +270,80 @@ Rectangle {
         requestRender();
     }
 
+    function sendDaemonCommand(obj) {
+        if (!daemonProc.running) {
+            daemonProc.running = true;
+        }
+        if (root.daemonReady) {
+            daemonProc.write(JSON.stringify(obj) + "\n");
+        } else {
+            root.daemonQueue.push(obj);
+        }
+    }
+
+    function handleDaemonMessage(line) {
+        var trimmed = String(line || "").trim();
+        if (trimmed.length === 0) return;
+        try {
+            var resp = JSON.parse(trimmed);
+            if (!resp.success) {
+                console.warn("Daemon returned error for action " + resp.action + ": " + resp.error);
+                if (resp.action === "load") {
+                    root.showToast("✕ Failed to load RAW: " + (resp.error || "Unknown error"), Theme.highlightClip);
+                } else if (resp.action === "ai_auto" || resp.action === "ai_social") {
+                    root.showToast("✕ " + (resp.error || "AI action failed"), Theme.highlightClip);
+                }
+                return;
+            }
+
+            var act = resp.action;
+            var data = resp.data;
+
+            if (act === "load") {
+                if (data) {
+                    root.activeMetadata = data.metadata;
+                    root.activeScene = data.scene;
+                    root.applyRecipeObject(data.recipe);
+                }
+            } else if (act === "adjust") {
+                if (data) {
+                    root.activeHistogram = data.histogram;
+                    viewport.imageSource = data.image;
+                    navigator.imageSource = data.image;
+                }
+            } else if (act === "ai_auto") {
+                if (data) {
+                    root.applyRecipeObject(data.recipe);
+                    root.activeScene = data.scene;
+                    root.showToast("✓ AI Auto Tone Applied", Theme.accentCyan);
+                }
+            } else if (act === "ai_social") {
+                if (data) {
+                    if (data.recipe) {
+                        root.applyRecipeObject(data.recipe);
+                    }
+                    root.showToast("✓ " + data.platform + " applied (" + data.target_resolution + ")", Theme.accentCyan);
+                }
+            } else if (act === "save_recipe") {
+                root.showToast("✓ Recipe sidecar saved", Theme.accentGreen);
+            }
+        } catch(e) {
+            console.error("Error parsing daemon message:", e, line);
+        }
+    }
+
+    function saveSidecar() {
+        root.sendDaemonCommand({
+            cmd: "save_recipe",
+            recipe: root.buildRecipeObject()
+        });
+    }
+
+    function triggerAiAuto() {
+        root.showToast("⚡ AI analyzing dynamic range & scene...", Theme.accentCyan);
+        root.sendDaemonCommand({ cmd: "ai_auto" });
+    }
+
     function requestRender() {
         if (renderDebounce.running) {
             renderDebounce.restart();
@@ -278,77 +354,44 @@ Rectangle {
 
     Timer {
         id: renderDebounce
-        interval: 35
+        interval: 20
         repeat: false
         onTriggered: {
-            if (!renderProc.running && root.activePhotoPath !== "") {
-                var recipeJson = JSON.stringify(root.buildRecipeObject());
-                var splitVal = root.isSplitView ? String(root.splitRatio) : "0.0";
-                renderProc.command = [
-                    root.resolveEnginePath(),
-                    "render",
-                    root.activePhotoPath,
-                    "--recipe", recipeJson,
-                    "--split", splitVal,
-                    "--out", root.currentRenderPath
-                ];
-                renderProc.running = true;
+            if (root.activePhotoPath !== "") {
+                var splitVal = root.isSplitView ? root.splitRatio : 0.0;
+                root.sendDaemonCommand({
+                    cmd: "adjust",
+                    recipe: root.buildRecipeObject(),
+                    split: splitVal
+                });
             }
         }
     }
 
-    // Process: Inspect file on load
+    // Persistent High-Speed Rust Engine Daemon
     Process {
-        id: inspectProc
-        stdout: StdioCollector {
-            waitForEnd: true
-            onStreamFinished: {
-                try {
-                    var resp = JSON.parse(text);
-                    if (resp.success && resp.data) {
-                        root.activeMetadata = resp.data.metadata;
-                        root.activeScene = resp.data.scene;
-                        root.applyRecipeObject(resp.data.recipe);
-                    }
-                } catch(e) {}
+        id: daemonProc
+        command: [root.resolveEnginePath(), "daemon"]
+        running: true
+        stdinEnabled: true
+
+        stdout: SplitParser {
+            splitMarker: "\n"
+            onRead: function(line) {
+                root.handleDaemonMessage(line);
             }
         }
-    }
 
-    // Process: Real-time Render
-    Process {
-        id: renderProc
-        stdout: StdioCollector {
-            waitForEnd: true
-            onStreamFinished: {
-                try {
-                    var resp = JSON.parse(text);
-                    if (resp.success && resp.data) {
-                        root.activeHistogram = resp.data.histogram;
-                        viewport.imageSource = "";
-                        viewport.imageSource = resp.data.image;
-                        navigator.imageSource = "";
-                        navigator.imageSource = resp.data.image;
-                    }
-                } catch(e) {}
+        onStarted: {
+            root.daemonReady = true;
+            while (root.daemonQueue.length > 0) {
+                var cmd = root.daemonQueue.shift();
+                daemonProc.write(JSON.stringify(cmd) + "\n");
             }
         }
-    }
 
-    // Process: AI Auto
-    Process {
-        id: aiProc
-        stdout: StdioCollector {
-            waitForEnd: true
-            onStreamFinished: {
-                try {
-                    var resp = JSON.parse(text);
-                    if (resp.success && resp.data) {
-                        root.applyRecipeObject(resp.data.recipe);
-                        root.activeScene = resp.data.scene;
-                    }
-                } catch(e) {}
-            }
+        onExited: function(exitCode, exitStatus) {
+            root.daemonReady = false;
         }
     }
 
@@ -411,30 +454,6 @@ Rectangle {
         }
     }
 
-    // Process: AI Social Optimizer
-    Process {
-        id: aiSocialProc
-        stdout: StdioCollector {
-            waitForEnd: true
-            onStreamFinished: {
-                try {
-                    var resp = JSON.parse(text);
-                    if (resp.success && resp.data) {
-                        var data = resp.data;
-                        if (data.recipe) {
-                            root.applyRecipeObject(data.recipe);
-                        }
-                        root.showToast("✓ " + data.platform + " applied (" + data.target_resolution + ")", Theme.accentCyan);
-                    } else {
-                        root.showToast("✕ AI Social optimize failed: " + (resp.error || "Unknown error"), Theme.highlightClip);
-                    }
-                } catch(e) {
-                    root.showToast("✕ AI Social response error", Theme.highlightClip);
-                }
-            }
-        }
-    }
-
     // Process: Folder scan
     Process {
         id: listProc
@@ -452,6 +471,10 @@ Rectangle {
     }
 
     // Keyboard Shortcuts (Lightroom & Studio Standards)
+    Shortcut {
+        sequence: "Ctrl+S"
+        onActivated: root.saveSidecar()
+    }
     Shortcut {
         sequence: "Ctrl+Shift+C"
         onActivated: root.copyRecipe()
@@ -481,8 +504,10 @@ Rectangle {
 
     function loadPhoto(path) {
         root.activePhotoPath = path;
-        inspectProc.command = [root.resolveEnginePath(), "inspect", path];
-        inspectProc.running = true;
+        root.sendDaemonCommand({
+            cmd: "load",
+            path: path
+        });
     }
 
     function scanLocalFolder(dir) {
@@ -540,8 +565,10 @@ Rectangle {
     function triggerSocial(platformCode) {
         if (!platformCode || platformCode.length === 0) return;
         root.showToast("⚡ AI optimizing for " + platformCode + "...", Theme.accentCyan);
-        aiSocialProc.command = [root.resolveEnginePath(), "ai-social", root.activePhotoPath, String(platformCode)];
-        aiSocialProc.running = true;
+        root.sendDaemonCommand({
+            cmd: "ai_social",
+            platform: String(platformCode)
+        });
     }
 
     function toggleCropMode() {
@@ -759,8 +786,10 @@ Rectangle {
                             Layout.fillWidth: true
                             onApplyPreset: function(n) { root.applyPresetNamed(n) }
                             onTriggerAiAuto: {
-                                aiProc.command = [root.resolveEnginePath(), "ai-auto", root.activePhotoPath];
-                                aiProc.running = true;
+                                root.triggerAiAuto();
+                            }
+                            onResetPreset: {
+                                root.resetRecipe();
                             }
                         }
 
@@ -768,9 +797,7 @@ Rectangle {
                         SocialOptimizer {
                             Layout.fillWidth: true
                             onTriggerSocialOptimize: function(platformCode) {
-                                root.showToast("⚡ AI optimizing for " + platformCode + "...", Theme.accentCyan);
-                                aiSocialProc.command = [root.resolveEnginePath(), "ai-social", root.activePhotoPath, platformCode];
-                                aiSocialProc.running = true;
+                                root.triggerSocial(platformCode);
                             }
                         }
 
@@ -1556,12 +1583,13 @@ Rectangle {
     }
 
     Component.onDestruction: {
-        if (inspectProc.running) inspectProc.running = false;
-        if (renderProc.running) renderProc.running = false;
-        if (aiProc.running) aiProc.running = false;
-        if (aiSocialProc.running) aiSocialProc.running = false;
+        if (daemonProc.running) {
+            daemonProc.write(JSON.stringify({ cmd: "exit" }) + "\n");
+            daemonProc.running = false;
+        }
         if (exportProc.running) exportProc.running = false;
         if (listProc.running) listProc.running = false;
         if (fetchGdriveProc.running) fetchGdriveProc.running = false;
+        if (openFileProc.running) openFileProc.running = false;
     }
 }

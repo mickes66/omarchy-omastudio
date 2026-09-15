@@ -10,7 +10,7 @@ pub mod security;
 use ai::{ai_auto_enhance, ai_classify_scene, ai_optimize_for_social};
 use export::{export_photo, ExportOptions};
 use gdrive::{fetch_remote_raw, is_gdrive_available, list_gdrive_folder};
-use pipeline::{process_buffer, process_split_comparison};
+use pipeline::{process_buffer_16_to_8, process_split_comparison_16_to_8};
 use raw::RawImage;
 use recipe::{Catalog, CatalogItem, Recipe};
 use serde::{Deserialize, Serialize};
@@ -23,9 +23,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 #[derive(Serialize)]
 struct ResponseWrapper<T: Serialize> {
     success: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    action: Option<String>,
     data: Option<T>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     error: Option<String>,
 }
 
@@ -33,6 +32,16 @@ impl<T: Serialize> ResponseWrapper<T> {
     fn ok(data: T) -> Self {
         Self {
             success: true,
+            action: None,
+            data: Some(data),
+            error: None,
+        }
+    }
+
+    fn ok_action(action: &str, data: T) -> Self {
+        Self {
+            success: true,
+            action: Some(action.to_string()),
             data: Some(data),
             error: None,
         }
@@ -41,6 +50,16 @@ impl<T: Serialize> ResponseWrapper<T> {
     fn err(msg: impl Into<String>) -> Self {
         Self {
             success: false,
+            action: None,
+            data: None,
+            error: Some(msg.into()),
+        }
+    }
+
+    fn err_action(action: &str, msg: impl Into<String>) -> Self {
+        Self {
+            success: false,
+            action: Some(action.to_string()),
             data: None,
             error: Some(msg.into()),
         }
@@ -50,6 +69,7 @@ impl<T: Serialize> ResponseWrapper<T> {
 fn print_json<T: Serialize>(resp: &ResponseWrapper<T>) {
     if let Ok(json) = serde_json::to_string(resp) {
         println!("{}", json);
+        let _ = io::stdout().flush();
     }
 }
 
@@ -75,11 +95,13 @@ struct ExportResult {
 
 struct DaemonCache {
     current_path: Option<String>,
-    raw_buffer: Option<Vec<u8>>,
+    raw_buffer_16: Option<Vec<u16>>,
+    raw_buffer_8: Option<Vec<u8>>,
     width: u32,
     height: u32,
     channels: u32,
     metadata: Option<raw::RawMetadata>,
+    ping_pong: usize,
 }
 
 
@@ -499,11 +521,11 @@ fn inspect_file(raw_path: &str) -> Result<InspectResult, String> {
 
 fn render_file(raw_path: &str, recipe: &Recipe, split: f32, out_path: &str) -> Result<RenderResult, String> {
     let raw = RawImage::open(raw_path)?;
-    let preview = raw.process_preview(true)?;
+    let preview = raw.process_preview_16(true)?;
 
     let (final_buf, hist) = if split > 0.001 {
-        process_split_comparison(
-            preview.as_slice(),
+        process_split_comparison_16_to_8(
+            preview.as_slice_u16(),
             preview.width,
             preview.height,
             preview.channels,
@@ -511,8 +533,8 @@ fn render_file(raw_path: &str, recipe: &Recipe, split: f32, out_path: &str) -> R
             split,
         )
     } else {
-        process_buffer(
-            preview.as_slice(),
+        process_buffer_16_to_8(
+            preview.as_slice_u16(),
             preview.width,
             preview.height,
             preview.channels,
@@ -588,25 +610,31 @@ fn run_ai_social(raw_path: &str, platform: &str) -> Result<ai::SocialOptimizatio
 
 #[derive(Deserialize)]
 struct DaemonCommand {
-    cmd: String, // "load", "adjust", "ai", "save_recipe", "exit"
+    cmd: String, // "load", "adjust", "ai_auto", "ai_social", "save_recipe", "export", "ping", "exit"
     #[serde(default)]
     path: Option<String>,
+    #[serde(default)]
+    platform: Option<String>,
     #[serde(default)]
     recipe: Option<Recipe>,
     #[serde(default)]
     split: Option<f32>,
     #[serde(default)]
     out: Option<String>,
+    #[serde(default)]
+    options: Option<ExportOptions>,
 }
 
 fn run_daemon() {
     let cache = Arc::new(Mutex::new(DaemonCache {
         current_path: None,
-        raw_buffer: None,
+        raw_buffer_16: None,
+        raw_buffer_8: None,
         width: 0,
         height: 0,
         channels: 0,
         metadata: None,
+        ping_pong: 0,
     }));
 
     let stdin = io::stdin();
@@ -623,17 +651,20 @@ fn run_daemon() {
         let cmd_obj: DaemonCommand = match serde_json::from_str(trimmed) {
             Ok(c) => c,
             Err(e) => {
-                print_json::<()>(&ResponseWrapper::err(format!("Invalid JSON command: {}", e)));
+                print_json::<()>(&ResponseWrapper::err_action("error", format!("Invalid JSON command: {}", e)));
                 continue;
             }
         };
 
         match cmd_obj.cmd.as_str() {
+            "ping" => {
+                print_json(&ResponseWrapper::ok_action("ping", "pong"));
+            }
             "load" => {
                 let p = match cmd_obj.path {
                     Some(ref path) => path,
                     None => {
-                        print_json::<()>(&ResponseWrapper::err("Missing path in load command"));
+                        print_json::<()>(&ResponseWrapper::err_action("load", "Missing path in load command"));
                         continue;
                     }
                 };
@@ -656,15 +687,21 @@ fn run_daemon() {
                             cam_mul: [1.0, 1.0, 1.0, 1.0],
                         });
 
-                        match raw.process_preview(true) {
+                        match raw.process_preview_16(true) {
                             Ok(prev) => {
+                                let u16_slice = prev.as_slice_u16();
+                                let u16_vec = u16_slice.to_vec();
+                                let u8_vec: Vec<u8> = u16_slice.iter().map(|&x| (x >> 8) as u8).collect();
+
                                 let mut c = cache.lock().unwrap();
                                 c.current_path = Some(p.clone());
                                 c.width = prev.width;
                                 c.height = prev.height;
                                 c.channels = prev.channels;
-                                c.raw_buffer = Some(prev.to_vec());
+                                c.raw_buffer_16 = Some(u16_vec);
+                                c.raw_buffer_8 = Some(u8_vec.clone());
                                 c.metadata = Some(meta.clone());
+                                c.ping_pong = 0;
 
                                 let home = env::var("HOME").unwrap_or_else(|_| ".".to_string());
                                 let thumb_path = PathBuf::from(home)
@@ -673,9 +710,9 @@ fn run_daemon() {
                                 let _ = raw.extract_thumbnail(&thumb_path);
 
                                 let sidecar = Recipe::load_sidecar(p).unwrap_or_default();
-                                let scene = ai_classify_scene(prev.as_slice(), prev.width, prev.height, prev.channels, &meta);
+                                let scene = ai_classify_scene(&u8_vec, prev.width, prev.height, prev.channels, &meta);
 
-                                print_json(&ResponseWrapper::ok(InspectResult {
+                                print_json(&ResponseWrapper::ok_action("load", InspectResult {
                                     path: p.clone(),
                                     metadata: meta,
                                     thumbnail: thumb_path.to_string_lossy().to_string(),
@@ -683,81 +720,168 @@ fn run_daemon() {
                                     scene,
                                 }));
                             }
-                            Err(e) => print_json::<()>(&ResponseWrapper::err(e)),
+                            Err(e) => print_json::<()>(&ResponseWrapper::err_action("load", e)),
                         }
                     }
-                    Err(e) => print_json::<()>(&ResponseWrapper::err(e)),
+                    Err(e) => print_json::<()>(&ResponseWrapper::err_action("load", e)),
                 }
             }
             "adjust" => {
-                let c = cache.lock().unwrap();
-                if c.raw_buffer.is_none() {
-                    print_json::<()>(&ResponseWrapper::err("No RAW image currently loaded in daemon cache"));
+                let mut c = cache.lock().unwrap();
+                if c.raw_buffer_16.is_none() {
+                    print_json::<()>(&ResponseWrapper::err_action("adjust", "No RAW image currently loaded in daemon cache"));
                     continue;
                 }
 
-                let buffer = c.raw_buffer.as_ref().unwrap();
+                let width = c.width;
+                let height = c.height;
+                let channels = c.channels;
                 let recipe = cmd_obj.recipe.unwrap_or_default();
                 let split = cmd_obj.split.unwrap_or(0.0);
-                let out_dest = cmd_obj.out.unwrap_or_else(|| "/dev/shm/omastudio_viewport.ppm".to_string());
+
+                let next_slot = (c.ping_pong + 1) % 2;
+                c.ping_pong = next_slot;
+
+                let shm_dir = Path::new("/dev/shm");
+                let base_dir = if shm_dir.exists() && shm_dir.is_dir() {
+                    PathBuf::from("/dev/shm")
+                } else {
+                    let home = env::var("HOME").unwrap_or_else(|_| ".".to_string());
+                    let cache_dir = PathBuf::from(home).join(".cache/omastudio");
+                    let _ = security::ensure_secure_dir(&cache_dir);
+                    cache_dir
+                };
+
+                let out_dest = cmd_obj.out.unwrap_or_else(|| {
+                    base_dir.join(format!("omastudio_preview_{}.ppm", next_slot)).to_string_lossy().to_string()
+                });
+
+                let buffer = match c.raw_buffer_16.as_ref() {
+                    Some(b) => b,
+                    None => {
+                        print_json::<()>(&ResponseWrapper::err_action("adjust", "Buffer unavailable"));
+                        continue;
+                    }
+                };
 
                 let (final_buf, hist) = if split > 0.001 {
-                    process_split_comparison(
+                    process_split_comparison_16_to_8(
                         buffer,
-                        c.width,
-                        c.height,
-                        c.channels,
+                        width,
+                        height,
+                        channels,
                         &recipe,
                         split,
                     )
                 } else {
-                    process_buffer(
+                    process_buffer_16_to_8(
                         buffer,
-                        c.width,
-                        c.height,
-                        c.channels,
+                        width,
+                        height,
+                        channels,
                         &recipe,
                     )
                 };
 
                 let dest_path = Path::new(&out_dest);
+                if let Some(parent) = dest_path.parent() {
+                    let _ = security::ensure_secure_dir(parent);
+                }
+
                 if out_dest.ends_with(".ppm") {
                     if let Ok(mut f) = std::fs::File::create(dest_path) {
-                        let _ = write!(f, "P6\n{} {}\n255\n", c.width, c.height);
+                        let _ = write!(f, "P6\n{} {}\n255\n", width, height);
                         let _ = f.write_all(&final_buf);
                     }
                 } else {
                     if let Some(img) = image::ImageBuffer::<image::Rgb<u8>, Vec<u8>>::from_raw(
-                        c.width,
-                        c.height,
+                        width,
+                        height,
                         final_buf,
                     ) {
                         let _ = img.save(dest_path);
                     }
                 }
 
-                print_json(&ResponseWrapper::ok(RenderResult {
+                print_json(&ResponseWrapper::ok_action("adjust", RenderResult {
                     image: out_dest,
                     histogram: hist,
                 }));
+            }
+            "ai_auto" => {
+                let c = cache.lock().unwrap();
+                if let (Some(ref buffer), Some(ref meta)) = (&c.raw_buffer_8, &c.metadata) {
+                    let auto_recipe = ai_auto_enhance(buffer, c.width, c.height, c.channels, meta);
+                    let scene = ai_classify_scene(buffer, c.width, c.height, c.channels, meta);
+                    let path_str = c.current_path.clone().unwrap_or_default();
+                    print_json(&ResponseWrapper::ok_action("ai_auto", InspectResult {
+                        path: path_str,
+                        metadata: meta.clone(),
+                        thumbnail: String::new(),
+                        recipe: auto_recipe,
+                        scene,
+                    }));
+                } else {
+                    print_json::<()>(&ResponseWrapper::err_action("ai_auto", "No image loaded in cache for AI Auto"));
+                }
+            }
+            "ai_social" => {
+                let platform = cmd_obj.platform.unwrap_or_else(|| "ig".to_string());
+                let c = cache.lock().unwrap();
+                if let Some(ref buffer) = c.raw_buffer_8 {
+                    let sidecar = c.current_path.as_ref()
+                        .and_then(Recipe::load_sidecar)
+                        .unwrap_or_default();
+                    let result = ai_optimize_for_social(
+                        buffer,
+                        c.width,
+                        c.height,
+                        c.channels,
+                        &platform,
+                        &sidecar,
+                    );
+                    print_json(&ResponseWrapper::ok_action("ai_social", result));
+                } else {
+                    print_json::<()>(&ResponseWrapper::err_action("ai_social", "No image loaded in cache for AI Social"));
+                }
             }
             "save_recipe" => {
                 let c = cache.lock().unwrap();
                 if let (Some(ref p), Some(ref recipe)) = (&c.current_path, &cmd_obj.recipe) {
                     match recipe.save_sidecar(p) {
-                        Ok(sidecar_path) => print_json(&ResponseWrapper::ok(sidecar_path.to_string_lossy().to_string())),
-                        Err(e) => print_json::<()>(&ResponseWrapper::err(format!("Failed to save sidecar: {}", e))),
+                        Ok(sidecar_path) => print_json(&ResponseWrapper::ok_action("save_recipe", sidecar_path.to_string_lossy().to_string())),
+                        Err(e) => print_json::<()>(&ResponseWrapper::err_action("save_recipe", format!("Failed to save sidecar: {}", e))),
                     }
                 } else {
-                    print_json::<()>(&ResponseWrapper::err("No image loaded or recipe missing"));
+                    print_json::<()>(&ResponseWrapper::err_action("save_recipe", "No image loaded or recipe missing"));
+                }
+            }
+            "export" => {
+                let c = cache.lock().unwrap();
+                let p = match &c.current_path {
+                    Some(p) => p.clone(),
+                    None => {
+                        print_json::<()>(&ResponseWrapper::err_action("export", "No image loaded"));
+                        continue;
+                    }
+                };
+                let recipe = cmd_obj.recipe.unwrap_or_default();
+                let options = cmd_obj.options.unwrap_or_default();
+                drop(c); // release lock during full export
+
+                match export_photo(&p, &recipe, &options) {
+                    Ok(dest) => print_json(&ResponseWrapper::ok_action("export", ExportResult {
+                        exported_path: dest.to_string_lossy().to_string(),
+                    })),
+                    Err(e) => print_json::<()>(&ResponseWrapper::err_action("export", e)),
                 }
             }
             "exit" => {
-                print_json(&ResponseWrapper::ok("Daemon exiting"));
+                print_json(&ResponseWrapper::ok_action("exit", "Daemon exiting"));
                 break;
             }
-            _ => {
-                print_json::<()>(&ResponseWrapper::err("Unknown daemon command"));
+            unknown => {
+                print_json::<()>(&ResponseWrapper::err_action("error", format!("Unknown daemon command: {}", unknown)));
             }
         }
     }
