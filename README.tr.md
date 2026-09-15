@@ -80,13 +80,16 @@ flowchart LR
 
 ## 🌟 Öne Çıkan Özellikler
 
-### 1. Kapsamlı RAW Format Desteği
+### 1. Kapsamlı RAW & 16-Bit Medium Format (Orta Format) Desteği
+* **Orta Format (Medium Format):** Fujifilm GFX serisi (GFX 100 II, GFX 100S, GFX 50S vb.), Hasselblad (`.3FR`, `.DNG`) ve Phase One 16-bit 100+ MP devasa sensörler.
+* **16-Bit Kayıpsız Renk Derinliği (48-bit RGB):** Derin gölge (+4 EV, +100 Shadows) ve parlak alan kurtarmada 8-bit kuantizasyon basamaklanmasını (banding) sıfıra indiren tam 16-bit matematiksel işleme boru hattı.
+* **Master 16-Bit Dışa Aktarma:** Baskı ve arşiv için gerçek 16-bit TIFF ve 16-bit PNG (48-bit RGB) çıktısı, geniş renk gamlı JXL ve AVIF desteği.
 * **Nikon:** `.NEF`, `.NRW` (Z8 / Z9 High-Efficiency HE/HE* dahil)
 * **Fujifilm:** `.RAF` (X-Trans II/III/IV/V 6x6 matris sensörleri ve Bayer)
 * **Canon:** `.CR2`, `.CR3` (ISOBMFF tabanlı)
 * **Sony:** `.ARW`, `.SR2` (Alpha 7/9/1 serisi)
 * **Leica & Evrensel DNG:** `.DNG`, `.RWL` (M, SL, Q serileri, drone ve akıllı telefonlar)
-* **Diğer:** Olympus (`.ORF`), Panasonic (`.RW2`), Hasselblad (`.3FR`)
+* **Diğer:** Olympus (`.ORF`), Panasonic (`.RW2`)
 
 ### 2. Mac Kalitesinde Touchpad & Mouse Ergonomisi (1:1 macOS Deneyimi)
 Linux masaüstündeki en büyük eksikliklerden biri olan "kaba veya kontrolsüz dokunmatik tepkileri" tamamen çözüldü. OmaStudio, **Apple Magic Trackpad ve macOS tuval ergonomisiyle 1:1 aynı hissi** sunar:

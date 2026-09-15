@@ -80,13 +80,16 @@ flowchart LR
 
 ## 🌟 Key Features
 
-### 1. Comprehensive RAW Format Support
+### 1. Comprehensive RAW & 16-Bit Medium Format Support
+* **Medium Format:** Fujifilm GFX series (GFX 100 II, GFX 100S, GFX 50S, etc.), Hasselblad (`.3FR`, `.DNG`), and Phase One 16-bit 100+ MP massive sensors.
+* **16-Bit Lossless Color Pipeline (48-bit RGB):** Full 16-bit computational pipeline that eliminates 8-bit quantization banding during extreme shadow recovery (+4 EV, +100 Shadows) and highlight rolloff.
+* **Master 16-Bit Export:** Genuine 16-bit TIFF and 16-bit PNG (48-bit RGB) master files, plus high dynamic range wide-gamut JXL and AVIF output.
 * **Nikon:** `.NEF`, `.NRW` (including Z8 / Z9 High-Efficiency HE/HE*)
 * **Fujifilm:** `.RAF` (X-Trans II/III/IV/V 6x6 matrix sensors & Bayer)
 * **Canon:** `.CR2`, `.CR3` (ISOBMFF-based)
 * **Sony:** `.ARW`, `.SR2` (Alpha 7/9/1 series)
 * **Leica & Universal DNG:** `.DNG`, `.RWL` (M, SL, Q series, drones, and smartphones)
-* **Others:** Olympus (`.ORF`), Panasonic (`.RW2`), Hasselblad (`.3FR`)
+* **Others:** Olympus (`.ORF`), Panasonic (`.RW2`)
 
 ### 2. 1:1 macOS Touchpad & Mouse Ergonomics
 Linux desktops have historically suffered from jittery or uncontrolled touch gestures. OmaStudio resolves this completely by matching **Apple Magic Trackpad and macOS canvas ergonomics 1:1**:
