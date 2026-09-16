@@ -18,6 +18,7 @@ Scope {
         Text {
             anchors.centerIn: parent
             text: "󰄄"
+            font.family: Theme.iconFont
             font.pixelSize: 14
             color: btnMouse.containsMouse ? Theme.accent : Theme.textMain
         }

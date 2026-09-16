@@ -15,13 +15,51 @@ ColumnLayout {
     property int activeChannel: 0
 
     signal colorChanged()
+    signal hslValuesChanged(var h, var s, var l)
+
+    function setChannelHue(val) {
+        var arr = (root.hslHue ? root.hslHue.slice() : [0,0,0,0,0,0,0,0]);
+        arr[root.activeChannel] = val;
+        root.hslHue = arr;
+        root.hslValuesChanged(root.hslHue, root.hslSat, root.hslLum);
+        root.colorChanged();
+    }
+
+    function setChannelSat(val) {
+        var arr = (root.hslSat ? root.hslSat.slice() : [0,0,0,0,0,0,0,0]);
+        arr[root.activeChannel] = val;
+        root.hslSat = arr;
+        root.hslValuesChanged(root.hslHue, root.hslSat, root.hslLum);
+        root.colorChanged();
+    }
+
+    function setChannelLum(val) {
+        var arr = (root.hslLum ? root.hslLum.slice() : [0,0,0,0,0,0,0,0]);
+        arr[root.activeChannel] = val;
+        root.hslLum = arr;
+        root.hslValuesChanged(root.hslHue, root.hslSat, root.hslLum);
+        root.colorChanged();
+    }
+
+    function resetCurrentChannel() {
+        var h = (root.hslHue ? root.hslHue.slice() : [0,0,0,0,0,0,0,0]);
+        var s = (root.hslSat ? root.hslSat.slice() : [0,0,0,0,0,0,0,0]);
+        var l = (root.hslLum ? root.hslLum.slice() : [0,0,0,0,0,0,0,0]);
+        h[root.activeChannel] = 0;
+        s[root.activeChannel] = 0;
+        l[root.activeChannel] = 0;
+        root.hslHue = h;
+        root.hslSat = s;
+        root.hslLum = l;
+        root.hslValuesChanged(root.hslHue, root.hslSat, root.hslLum);
+        root.colorChanged();
+    }
 
     function resetAll() {
-        for (var i = 0; i < 8; i++) {
-            hslHue[i] = 0;
-            hslSat[i] = 0;
-            hslLum[i] = 0;
-        }
+        root.hslHue = [0, 0, 0, 0, 0, 0, 0, 0];
+        root.hslSat = [0, 0, 0, 0, 0, 0, 0, 0];
+        root.hslLum = [0, 0, 0, 0, 0, 0, 0, 0];
+        root.hslValuesChanged(root.hslHue, root.hslSat, root.hslLum);
         root.colorChanged();
     }
 
@@ -77,10 +115,17 @@ ColumnLayout {
         }
         Item { Layout.fillWidth: true }
         Text {
-            text: "Double click to reset"
+            text: "Double click to reset channel"
             textFormat: Text.PlainText
             font.pixelSize: 10
             color: Theme.textDim
+
+            MouseArea {
+                anchors.fill: parent
+                cursorShape: Qt.PointingHandCursor
+                hoverEnabled: true
+                onDoubleClicked: root.resetCurrentChannel()
+            }
         }
     }
 
@@ -88,11 +133,11 @@ ColumnLayout {
         title: "Hue Shift"
         from: -100.0
         to: 100.0
-        value: root.hslHue[root.activeChannel]
+        value: (root.hslHue && root.hslHue.length > root.activeChannel) ? root.hslHue[root.activeChannel] : 0.0
+        defaultValue: 0.0
         accentColor: root.channelColors[root.activeChannel]
         onSliderMoved: function(newVal) {
-            root.hslHue[root.activeChannel] = newVal
-            root.colorChanged()
+            root.setChannelHue(newVal)
         }
     }
 
@@ -100,11 +145,11 @@ ColumnLayout {
         title: "Saturation"
         from: -100.0
         to: 100.0
-        value: root.hslSat[root.activeChannel]
+        value: (root.hslSat && root.hslSat.length > root.activeChannel) ? root.hslSat[root.activeChannel] : 0.0
+        defaultValue: 0.0
         accentColor: root.channelColors[root.activeChannel]
         onSliderMoved: function(newVal) {
-            root.hslSat[root.activeChannel] = newVal
-            root.colorChanged()
+            root.setChannelSat(newVal)
         }
     }
 
@@ -112,11 +157,11 @@ ColumnLayout {
         title: "Luminance"
         from: -100.0
         to: 100.0
-        value: root.hslLum[root.activeChannel]
+        value: (root.hslLum && root.hslLum.length > root.activeChannel) ? root.hslLum[root.activeChannel] : 0.0
+        defaultValue: 0.0
         accentColor: root.channelColors[root.activeChannel]
         onSliderMoved: function(newVal) {
-            root.hslLum[root.activeChannel] = newVal
-            root.colorChanged()
+            root.setChannelLum(newVal)
         }
     }
 }

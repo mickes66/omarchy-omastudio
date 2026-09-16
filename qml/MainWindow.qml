@@ -157,8 +157,29 @@ Rectangle {
         viewport.rotationAngle = 0.0;
         viewport.flipH = false;
         viewport.flipV = false;
+        if (typeof presetSel !== "undefined" && presetSel) presetSel.activePreset = "";
+        if (typeof socialOpt !== "undefined" && socialOpt) socialOpt.activePlatform = "";
         root.showToast("✓ Reset to defaults (Ctrl+R)", Theme.textDim);
         root.requestRender();
+    }
+
+    function resetSocialOptimization() {
+        root.cropX = 0.0;
+        root.cropY = 0.0;
+        root.cropW = 1.0;
+        root.cropH = 1.0;
+        root.cropAspect = "Original";
+        viewport.resetCrop();
+        root.sharpnessVal = 25.0;
+        root.clarityValue = 0.0;
+        root.vibranceValue = 0.0;
+        root.shadowsValue = 0.0;
+        root.whitesValue = 0.0;
+        if (typeof socialOpt !== "undefined" && socialOpt) {
+            socialOpt.activePlatform = "";
+        }
+        root.requestRender();
+        root.showToast("✓ AI Social Framing & Adjustments Reset", Theme.accentCyan);
     }
 
     function buildRecipeObject() {
@@ -783,6 +804,7 @@ Rectangle {
 
                         // Film Presets at top of adjustments
                         PresetSelector {
+                            id: presetSel
                             Layout.fillWidth: true
                             onApplyPreset: function(n) { root.applyPresetNamed(n) }
                             onTriggerAiAuto: {
@@ -795,9 +817,13 @@ Rectangle {
 
                         // AI Social Media Optimizer (One-click multi-platform framing & grading)
                         SocialOptimizer {
+                            id: socialOpt
                             Layout.fillWidth: true
                             onTriggerSocialOptimize: function(platformCode) {
                                 root.triggerSocial(platformCode);
+                            }
+                            onResetSocial: {
+                                root.resetSocialOptimization();
                             }
                         }
 

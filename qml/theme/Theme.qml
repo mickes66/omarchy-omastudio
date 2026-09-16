@@ -41,8 +41,8 @@ QtObject {
     readonly property int radiusLg: 14
 
     // Typography
-    readonly property string fontFamily: "Inter, Noto Sans, Cantarell, Sans-Serif"
-    readonly property string monoFont: "JetBrains Mono, Fira Code, Monospace"
+    readonly property string fontFamily: "JetBrainsMono Nerd Font, JetBrains Mono, monospace"
+    readonly property string monoFont: "JetBrainsMono Nerd Font, JetBrains Mono, monospace"
     readonly property string iconFont: "Font Awesome 7 Free Solid, Font Awesome 7 Free, JetBrainsMono Nerd Font, monospace"
 
     // Themeable Monochrome Icons (Unicode Font Glyph Standard)

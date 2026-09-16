@@ -8,15 +8,60 @@ ColumnLayout {
     spacing: 8
     Layout.fillWidth: true
 
-    signal triggerSocialOptimize(string platformCode)
+    property string activePlatform: ""
 
-    Text {
-        text: "AI SOCIAL MEDIA OPTIMIZER"
-        textFormat: Text.PlainText
-        font.pixelSize: 10
-        font.weight: Font.DemiBold
-        font.letterSpacing: 1
-        color: Theme.accentCyan
+    signal triggerSocialOptimize(string platformCode)
+    signal resetSocial()
+
+    RowLayout {
+        Layout.fillWidth: true
+        spacing: 4
+
+        Text {
+            text: "AI SOCIAL MEDIA OPTIMIZER"
+            textFormat: Text.PlainText
+            font.pixelSize: 10
+            font.weight: Font.DemiBold
+            font.letterSpacing: 1
+            color: Theme.accentCyan
+            Layout.fillWidth: true
+        }
+
+        // Reset social preset button
+        Rectangle {
+            visible: root.activePlatform !== ""
+            implicitWidth: 42
+            implicitHeight: 16
+            radius: Theme.radiusSm
+            color: "transparent"
+            border.color: Theme.accentCyan
+            border.width: 1
+
+            Text {
+                anchors.centerIn: parent
+                text: "RESET"
+                textFormat: Text.PlainText
+                font.pixelSize: 8
+                font.weight: Font.DemiBold
+                color: Theme.accentCyan
+            }
+
+            MouseArea {
+                anchors.fill: parent
+                cursorShape: Qt.PointingHandCursor
+                hoverEnabled: true
+                onEntered: {
+                    parent.color = Qt.rgba(Theme.accentCyan.r, Theme.accentCyan.g, Theme.accentCyan.b, 0.15)
+                }
+                onExited: {
+                    parent.color = "transparent"
+                }
+                onClicked: {
+                    root.activePlatform = ""
+                    root.resetSocial()
+                }
+            }
+        }
     }
 
     // Grid of Social Media Platform Targets
@@ -41,8 +86,12 @@ ColumnLayout {
                 Layout.fillWidth: true
                 implicitHeight: 46
                 radius: Theme.radiusSm
-                color: optMouse.containsMouse ? Theme.bgCardHover : Theme.bgCard
-                border.color: optMouse.containsMouse ? modelData.col : Theme.border
+                color: root.activePlatform === modelData.id
+                       ? Qt.rgba(modelData.col.r, modelData.col.g, modelData.col.b, 0.22)
+                       : (optMouse.containsMouse ? Theme.bgCardHover : Theme.bgCard)
+                border.color: root.activePlatform === modelData.id
+                              ? modelData.col
+                              : (optMouse.containsMouse ? modelData.col : Theme.border)
                 border.width: 1
 
                 ColumnLayout {
@@ -58,7 +107,7 @@ ColumnLayout {
                             textFormat: Text.PlainText
                             font.pixelSize: 10
                             font.weight: Font.Bold
-                            color: Theme.textMain
+                            color: root.activePlatform === modelData.id ? modelData.col : Theme.textMain
                             Layout.fillWidth: true
                             elide: Text.ElideRight
                         }
@@ -96,6 +145,7 @@ ColumnLayout {
                     cursorShape: Qt.PointingHandCursor
                     hoverEnabled: true
                     onClicked: {
+                        root.activePlatform = modelData.id;
                         root.triggerSocialOptimize(modelData.id);
                     }
                 }

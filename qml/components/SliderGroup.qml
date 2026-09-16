@@ -18,7 +18,22 @@ ColumnLayout {
     property int decimals: 0
     property color accentColor: Theme.accent
 
+    readonly property real effectiveValue: slider.pressed ? slider.value : root.value
+
     signal sliderMoved(real newValue)
+
+    onValueChanged: {
+        if (!slider.pressed && slider.value !== root.value) {
+            slider.value = root.value;
+        }
+    }
+
+    Binding {
+        target: slider
+        property: "value"
+        value: root.value
+        when: !slider.pressed
+    }
 
     RowLayout {
         Layout.fillWidth: true
@@ -38,16 +53,16 @@ ColumnLayout {
             implicitWidth: valText.implicitWidth + 12
             implicitHeight: 20
             radius: 4
-            color: root.value !== root.defaultValue ? Qt.rgba(root.accentColor.r, root.accentColor.g, root.accentColor.b, 0.2) : Theme.bgCard
-            border.color: root.value !== root.defaultValue ? root.accentColor : Theme.border
+            color: root.effectiveValue !== root.defaultValue ? Qt.rgba(root.accentColor.r, root.accentColor.g, root.accentColor.b, 0.2) : Theme.bgCard
+            border.color: root.effectiveValue !== root.defaultValue ? root.accentColor : Theme.border
             border.width: 1
 
             Text {
                 id: valText
                 anchors.centerIn: parent
-                text: (root.decimals === 0 ? Math.round(root.value) : root.value.toFixed(root.decimals)) + root.suffix
+                text: (root.decimals === 0 ? Math.round(root.effectiveValue) : root.effectiveValue.toFixed(root.decimals)) + root.suffix
                 textFormat: Text.PlainText
-                color: root.value !== root.defaultValue ? root.accentColor : Theme.textMuted
+                color: root.effectiveValue !== root.defaultValue ? root.accentColor : Theme.textMuted
                 font.pixelSize: 11
                 font.family: Theme.monoFont
                 font.weight: Font.DemiBold
@@ -58,7 +73,7 @@ ColumnLayout {
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
                 onDoubleClicked: {
-                    root.value = root.defaultValue
+                    slider.value = root.defaultValue
                     root.sliderMoved(root.defaultValue)
                 }
             }
@@ -110,7 +125,6 @@ ColumnLayout {
         }
 
         onMoved: {
-            root.value = slider.value
             root.sliderMoved(slider.value)
         }
     }
