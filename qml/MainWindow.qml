@@ -159,6 +159,8 @@ Rectangle {
         viewport.flipV = false;
         if (typeof presetSel !== "undefined" && presetSel) presetSel.activePreset = "";
         if (typeof socialOpt !== "undefined" && socialOpt) socialOpt.activePlatform = "";
+        if (typeof hslMixer !== "undefined" && hslMixer) hslMixer.resetAll();
+        if (typeof colorWheels !== "undefined" && colorWheels) colorWheels.resetAllWheels();
         root.showToast("✓ Reset to defaults (Ctrl+R)", Theme.textDim);
         root.requestRender();
     }
@@ -1253,7 +1255,11 @@ Rectangle {
                                         cursorShape: Qt.PointingHandCursor
                                         hoverEnabled: true
                                         onClicked: {
+                                            root.hslH = [0, 0, 0, 0, 0, 0, 0, 0];
+                                            root.hslS = [0, 0, 0, 0, 0, 0, 0, 0];
+                                            root.hslL = [0, 0, 0, 0, 0, 0, 0, 0];
                                             hslMixer.resetAll();
+                                            root.requestRender();
                                         }
                                     }
                                 }
@@ -1265,6 +1271,11 @@ Rectangle {
                                 hslHue: root.hslH
                                 hslSat: root.hslS
                                 hslLum: root.hslL
+                                onHslValuesChanged: function(h, s, l) {
+                                    root.hslH = h;
+                                    root.hslS = s;
+                                    root.hslL = l;
+                                }
                                 onColorChanged: root.requestRender()
                             }
 

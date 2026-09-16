@@ -523,9 +523,16 @@ Rectangle {
         // MOUSE WHEEL & TOUCHPAD ZOOM / PAN HANDLER
         WheelHandler {
             id: wheelHandler
-            orientation: Qt.Vertical | Qt.Horizontal
+            target: null
             acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
             onWheel: function(event) {
+                var curX = (typeof event.x !== "undefined") ? event.x
+                         : (event.position ? event.position.x
+                         : (wheelHandler.point ? wheelHandler.point.position.x : root.width / 2));
+                var curY = (typeof event.y !== "undefined") ? event.y
+                         : (event.position ? event.position.y
+                         : (wheelHandler.point ? wheelHandler.point.position.y : root.height / 2));
+
                 if (event.modifiers & (Qt.AltModifier | Qt.MetaModifier)) {
                     // Option/Alt key + wheel = smooth micro-rotation (1.5° per step)
                     var rotDelta = event.angleDelta.y !== 0 ? (event.angleDelta.y / 120.0) * 1.5 : (event.pixelDelta.y * 0.05);
@@ -534,19 +541,15 @@ Rectangle {
                     while (newAngle <= -180.0) newAngle += 360.0;
                     root.rotationAngle = newAngle;
                     root.rotationChangedByUser(root.rotationAngle);
-                } else if ((event.modifiers & Qt.ControlModifier) || (event.pixelDelta.x === 0 && event.pixelDelta.y === 0)) {
-                    // MOUSE WHEEL (Discrete mouse notches) OR Ctrl+Scroll (Zoom centered at cursor)
+                } else if (event.angleDelta.y !== 0) {
+                    // Natural mouse wheel vertical zoom centered at cursor position
                     var steps = event.angleDelta.y / 120.0;
-                    if (steps !== 0) {
-                        var zoomMult = Math.pow(1.12, steps);
-                        root.zoomRelativeAt(event.position.x, event.position.y, zoomMult);
-                    }
-                } else {
-                    // TOUCHPAD 2-FINGER CONTINUOUS DAMPED PANNING
-                    var dx = event.pixelDelta.x !== 0 ? (event.pixelDelta.x * 0.75) : ((event.angleDelta.x / 120.0) * 20.0);
-                    var dy = event.pixelDelta.y !== 0 ? (event.pixelDelta.y * 0.75) : ((event.angleDelta.y / 120.0) * 20.0);
-                    root.panX += dx;
-                    root.panY += dy;
+                    var zoomMult = Math.pow(1.15, steps);
+                    root.zoomRelativeAt(curX, curY, zoomMult);
+                } else if (event.pixelDelta.y !== 0 || event.pixelDelta.x !== 0) {
+                    // Touchpad 2-finger continuous panning
+                    root.panX += event.pixelDelta.x * 0.75;
+                    root.panY += event.pixelDelta.y * 0.75;
                     root.clampPan();
                     root.updateNormCoordinates();
                 }

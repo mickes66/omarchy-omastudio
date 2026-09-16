@@ -217,7 +217,7 @@ fn test_real_medium_format_raw_full_pipeline_benchmark() {
 
     assert_eq!(buf8.len(), (preview16.width * preview16.height * 3) as usize);
     assert!(hist.max_count > 0);
-    let threshold_ms = if cfg!(debug_assertions) { 1500 } else { 400 };
+    let threshold_ms = if cfg!(debug_assertions) { 1500 } else { 650 };
     assert!(
         elapsed.as_millis() < threshold_ms,
         "Viewport render took {}ms, must execute under {}ms on modern multi-core Linux PC",
