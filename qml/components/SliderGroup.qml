@@ -44,7 +44,7 @@ ColumnLayout {
             textFormat: Text.PlainText
             color: root.effectiveValue !== root.defaultValue ? Theme.textMain : Theme.textMuted
             font.pixelSize: 12
-            font.weight: root.effectiveValue !== root.defaultValue ? Font.SemiBold : Font.Medium
+            font.weight: root.effectiveValue !== root.defaultValue ? Font.DemiBold : Font.Medium
             Layout.fillWidth: true
             elide: Text.ElideRight
 
