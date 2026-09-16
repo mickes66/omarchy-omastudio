@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct ExportOptions {
     pub format: String, // "jxl", "avif", "webp", "tiff", "png", "jpeg"
     pub quality: u32,   // 1 to 100

@@ -1310,6 +1310,7 @@ Rectangle {
                                         onClicked: {
                                             root.sharpnessVal = 25.0;
                                             root.denoiseLumVal = 0.0;
+                                            root.denoiseColVal = 10.0;
                                             root.vignetteVal = 0.0;
                                             root.defringeVal = 0.0;
                                             root.lensDistortionVal = 0.0;
@@ -1335,6 +1336,16 @@ Rectangle {
                                 value: root.denoiseLumVal
                                 defaultValue: 0.0
                                 onSliderMoved: function(v) { root.denoiseLumVal = v; root.requestRender() }
+                            }
+
+                            SliderGroup {
+                                title: "Noise Reduction (Color)"
+                                from: 0.0
+                                to: 100.0
+                                value: root.denoiseColVal
+                                defaultValue: 10.0
+                                accentColor: Theme.accentYellow
+                                onSliderMoved: function(v) { root.denoiseColVal = v; root.requestRender() }
                             }
 
                             SliderGroup {

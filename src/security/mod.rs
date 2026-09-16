@@ -207,10 +207,19 @@ pub fn run_bounded_command(
 pub fn ensure_secure_dir(path: &Path) -> io::Result<()> {
     if !path.exists() {
         fs::create_dir_all(path)?;
+        let mut perms = fs::metadata(path)?.permissions();
+        perms.set_mode(0o700);
+        fs::set_permissions(path, perms)?;
+    } else {
+        // If directory already exists, enforce 0700 if owned by user, but tolerate system dirs (e.g. /tmp, /dev/shm)
+        let mut perms = fs::metadata(path)?.permissions();
+        perms.set_mode(0o700);
+        if let Err(e) = fs::set_permissions(path, perms) {
+            if e.raw_os_error() != Some(libc::EPERM) && e.raw_os_error() != Some(libc::EACCES) {
+                return Err(e);
+            }
+        }
     }
-    let mut perms = fs::metadata(path)?.permissions();
-    perms.set_mode(0o700);
-    fs::set_permissions(path, perms)?;
     Ok(())
 }
 

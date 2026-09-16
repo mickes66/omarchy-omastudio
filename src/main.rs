@@ -377,6 +377,10 @@ fn main() {
                     "touchpad_mac_pinch_rotate_pan".into(),
                     "quickshell_ipc_agent_api".into(),
                     "omarchy_system_theme_sync".into(),
+                    "presence_engine_texture_clarity_dehaze".into(),
+                    "detail_and_optics_engine".into(),
+                    "medium_format_16bit_raw_pipeline".into(),
+                    "perceptual_shadow_retinal_toe".into(),
                 ],
             };
             print_json(&ResponseWrapper::ok(status));
