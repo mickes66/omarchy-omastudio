@@ -29,10 +29,10 @@ pub fn kelvin_to_rgb_multipliers(kelvin: f32, tint: f32) -> (f32, f32, f32) {
         138.5177312231 * b.ln() - 305.0447927307
     };
 
-    // Reference neutral D65 (6500K)
+    // Reference neutral Daylight (5500K - default neutral Recipe setting)
     let ref_r = 255.0;
-    let ref_g = 255.0;
-    let ref_b = 255.0;
+    let ref_g = 237.5;
+    let ref_b = 222.2;
 
     let mut mul_r = (ref_r / red.max(1.0)).clamp(0.4, 2.8);
     let mut mul_g = (ref_g / green.max(1.0)).clamp(0.4, 2.5);

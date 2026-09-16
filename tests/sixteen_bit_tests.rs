@@ -114,3 +114,43 @@ fn test_real_raw_16bit_loading_and_tiff_export() {
     let _ = std::fs::remove_file(exported);
     let _ = std::fs::remove_dir(tmp_dir);
 }
+
+#[test]
+fn test_shadow_lift_preserves_color_without_chroma_explosion() {
+    use omastudio_engine::pipeline::tone::apply_tone_pixel;
+
+    let recipe = Recipe {
+        shadows: 53.0,
+        highlights: -46.0,
+        ..Default::default()
+    };
+
+    // 1. Pure black must remain 0.0 (anchoring black point)
+    let (r_blk, g_blk, b_blk) = apply_tone_pixel(0.0, 0.0, 0.0, &recipe, 1.0);
+    assert_eq!((r_blk, g_blk, b_blk), (0.0, 0.0, 0.0), "Black point must remain anchored");
+
+    // 2. Muted shadow color (e.g. pink chair in room shadow)
+    let (r, g, b) = (0.122f32, 0.0305f32, 0.0610f32);
+    let luma_in = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+
+    let (r_out, g_out, b_out) = apply_tone_pixel(r, g, b, &recipe, 1.0);
+    let luma_out = 0.2126 * r_out + 0.7152 * g_out + 0.0722 * b_out;
+
+    // Luminance must be lifted
+    assert!(luma_out > luma_in * 1.5, "Shadows should be noticeably illuminated");
+
+    // Chroma gain must remain natural (under 1.4x), never exploding into neon lasers
+    let chroma_in = (r - luma_in).abs() + (g - luma_in).abs() + (b - luma_in).abs();
+    let chroma_out = (r_out - luma_out).abs() + (g_out - luma_out).abs() + (b_out - luma_out).abs();
+    let chroma_gain = chroma_out / chroma_in;
+
+    assert!(
+        chroma_gain <= 1.40,
+        "Chroma gain ({:.2}x) must not exceed perceptual threshold (prevents color explosion)",
+        chroma_gain
+    );
+
+    // Red channel must not blow out to clipping
+    assert!(r_out < 0.50, "Red channel ({:.3}) must not clip into saturated neon pink", r_out);
+}
+

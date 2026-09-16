@@ -23,34 +23,45 @@ pub fn apply_tone_pixel(
     let mut luma_adj = luma;
 
     // 2. Highlights recovery / compression
+    // Smooth quadratic rolloff in the top 65% of luminance
     if recipe.highlights != 0.0 {
-        let h_weight = (luma - 0.4).max(0.0) / 0.6; // Active mostly in top 60%
-        let h_adj = (recipe.highlights / 100.0) * h_weight * 0.4;
+        let h_norm = ((luma - 0.35).max(0.0) / 0.65).min(1.0);
+        let h_weight = h_norm * h_norm * (3.0 - 2.0 * h_norm); // Smoothstep
+        let h_adj = (recipe.highlights / 100.0) * h_weight * 0.35;
         luma_adj += h_adj;
     }
 
     // 3. Shadows lift / crush
+    // Natural photographic toe response:
+    // - Anchors true black (0.0 remains 0.0, avoiding milky washed-out blacks or lifted noise)
+    // - Delivers maximum lift in the shadow detail region (0.05 to 0.25)
+    // - Smoothly tapers to 0 at midtones (0.60)
     if recipe.shadows != 0.0 {
-        let s_weight = (0.6 - luma).max(0.0) / 0.6; // Active mostly in bottom 60%
-        let s_adj = (recipe.shadows / 100.0) * s_weight * 0.4;
+        let s_norm = (luma / 0.60).clamp(0.0, 1.0);
+        let falloff = (1.0 - s_norm) * (1.0 - s_norm);
+        let toe = (luma / (luma + 0.03)).clamp(0.0, 1.0);
+        let s_weight = falloff * toe;
+        let s_adj = (recipe.shadows / 100.0) * s_weight * 0.35;
         luma_adj += s_adj;
     }
 
     // 4. Whites & Blacks anchor points
     if recipe.whites != 0.0 {
-        let w_weight = (luma - 0.6).max(0.0) / 0.4;
+        let w_norm = ((luma - 0.60).max(0.0) / 0.40).min(1.0);
+        let w_weight = w_norm * w_norm;
         luma_adj += (recipe.whites / 100.0) * w_weight * 0.25;
     }
     if recipe.blacks != 0.0 {
-        let b_weight = (0.35 - luma).max(0.0) / 0.35;
-        luma_adj += (recipe.blacks / 100.0) * b_weight * 0.25;
+        let b_norm = ((0.30 - luma).max(0.0) / 0.30).min(1.0);
+        let b_weight = b_norm * b_norm;
+        luma_adj += (recipe.blacks / 100.0) * b_weight * 0.20;
     }
 
     // 5. Contrast (S-curve centered around midtone 0.18)
     if recipe.contrast != 0.0 {
         let c = recipe.contrast / 100.0;
         let diff = luma_adj - 0.18;
-        luma_adj = 0.18 + diff * (1.0 + c * 0.6) + (diff * diff * diff) * c * 0.4;
+        luma_adj = 0.18 + diff * (1.0 + c * 0.5) + (diff * diff * diff) * c * 0.3;
     }
 
     // Tone Curve 4-zone parametric offsets
@@ -59,20 +70,50 @@ pub fn apply_tone_pixel(
         let cl = (recipe.curve_lights / 100.0) * ((luma_adj - 0.5).max(0.0) * (0.75 - luma_adj).max(0.0) * 4.0);
         let cd = (recipe.curve_darks / 100.0) * ((luma_adj - 0.25).max(0.0) * (0.5 - luma_adj).max(0.0) * 4.0);
         let cs = (recipe.curve_shadows / 100.0) * (0.25 - luma_adj).max(0.0) / 0.25;
-        luma_adj += (ch + cl + cd + cs) * 0.3;
+        luma_adj += (ch + cl + cd + cs) * 0.25;
     }
 
     luma_adj = luma_adj.clamp(0.0, 1.5);
 
-    // Apply luma adjustment ratio to color channels
-    let luma_ratio = if luma > 0.0001 { luma_adj / luma } else { 1.0 };
-    r *= luma_ratio;
-    g *= luma_ratio;
-    b *= luma_ratio;
+    // =========================================================================
+    // COLOR-PRESERVING LUMINANCE ADJUSTMENT (Stevens / Hunt Perceptual Constancy)
+    // Decomposes into luminance and chrominance vectors (cr, cg, cb).
+    // Instead of naive multiplicative scaling (r *= luma_adj / luma) which multiplies
+    // chromaticity by up to 50x and causes extreme neon oversaturation / clipping,
+    // chroma scales gently with the 4th-root of luminance gain.
+    // =========================================================================
+    let ratio = if luma > 1e-5 { luma_adj / luma } else { 1.0 };
+
+    let chroma_scale = if ratio > 1.0 {
+        // Shadows lift: gentle perceptual colorfulness scaling (capped at 1.35x)
+        ratio.powf(0.20).min(1.35)
+    } else {
+        // Highlights compression: preserve sky/window color saturation
+        ratio.powf(0.40)
+    };
+
+    let cr = r - luma;
+    let cg = g - luma;
+    let cb = b - luma;
+
+    let mut r_adj = luma_adj + cr * chroma_scale;
+    let mut g_adj = luma_adj + cg * chroma_scale;
+    let mut b_adj = luma_adj + cb * chroma_scale;
+
+    // Soft highlight gamut roll-off: desaturate gently towards white near clipping
+    // preventing hard single-channel clipping from causing harsh neon hue shifts.
+    let max_comp = r_adj.max(g_adj).max(b_adj);
+    if max_comp > 0.88 && luma_adj > 0.65 {
+        let excess = ((max_comp - 0.88) / 0.30).min(1.0);
+        let desat = excess * 0.35;
+        r_adj = r_adj * (1.0 - desat) + luma_adj * desat;
+        g_adj = g_adj * (1.0 - desat) + luma_adj * desat;
+        b_adj = b_adj * (1.0 - desat) + luma_adj * desat;
+    }
 
     // 6. Presence: Vibrance and Saturation
-    let max_c = r.max(g).max(b);
-    let min_c = r.min(g).min(b);
+    let max_c = r_adj.max(g_adj).max(b_adj);
+    let min_c = r_adj.min(g_adj).min(b_adj);
     let current_sat = if max_c > 0.0001 { (max_c - min_c) / max_c } else { 0.0 };
 
     let mut sat_delta = recipe.saturation / 100.0;
@@ -84,12 +125,12 @@ pub fn apply_tone_pixel(
     }
 
     if sat_delta != 0.0 {
-        let new_luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        let cur_luma = 0.2126 * r_adj + 0.7152 * g_adj + 0.0722 * b_adj;
         let sat_mult = (1.0 + sat_delta).max(0.0);
-        r = new_luma + (r - new_luma) * sat_mult;
-        g = new_luma + (g - new_luma) * sat_mult;
-        b = new_luma + (b - new_luma) * sat_mult;
+        r_adj = cur_luma + (r_adj - cur_luma) * sat_mult;
+        g_adj = cur_luma + (g_adj - cur_luma) * sat_mult;
+        b_adj = cur_luma + (b_adj - cur_luma) * sat_mult;
     }
 
-    (r, g, b)
+    (r_adj, g_adj, b_adj)
 }
