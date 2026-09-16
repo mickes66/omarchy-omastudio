@@ -1,4 +1,4 @@
-# OmaStudio 📸
+# OmaStudio
 
 **Omarchy Linux için Quickshell & Rust Tabanlı Profesyonel RAW Fotoğraf Editörü**
 
@@ -10,32 +10,32 @@
 [![Platform](https://img.shields.io/badge/Platform-Omarchy%20Linux%20%7C%20Arch%20Linux-1793d1.svg)](https://omarchy.org)
 [![Engine: Rust](https://img.shields.io/badge/Engine-Rust%202021%20%28Rayon%29-dea584.svg)](Cargo.toml)
 [![UI: Quickshell](https://img.shields.io/badge/UI-Quickshell%20%7C%20Qt%206-41cd52.svg)](qml/)
-[![Security: AGENTS.md Compliant](https://img.shields.io/badge/Security-AGENTS.md%20Mode%200600-brightgreen.svg)](AGENTS.md)
+[![Security: CONTRIBUTING.md Compliant](https://img.shields.io/badge/Security-CONTRIBUTING.md%20Mode%200600-brightgreen.svg)](CONTRIBUTING.md)
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy_Me_A_Coffee-Destek_Ol-FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/ozdil)
 
 ![OmaStudio Preview](preview.png)
 
 ---
 
-## 🏛️ Mimari ve Çalışma Prensibi
+## Mimari ve Çalışma Prensibi
 
 OmaStudio, modern Linux masaüstünde yüksek performanslı fotoğraf düzenleme için hibrit bir mimari kullanır: Kullanıcı arayüzü GPU ivmeli **Quickshell (Qt 6 / QML)** üzerinde 60+ FPS ile çalışırken, görüntü işleme ve RAW kod çözme boru hattı çok çekirdekli **Rust (Rayon + LibRaw FFI)** motoru tarafından yürütülür.
 
 ```mermaid
 graph TD
-    subgraph UI ["🖥️ Kullanıcı Deneyimi (Quickshell / Qt 6 QML)"]
+    subgraph UI [" Kullanıcı Deneyimi (Quickshell / Qt 6 QML)"]
         Viewport["Canvas Görünümü<br/>(Pinch-Zoom / Pan / Rotation)"]
         Inspector["Pro Studio & Simple Modu<br/>(Modül Bazlı Bağımsız Reset)"]
         Wheels["DaVinci 3-Way Tekerlekler<br/>(Lift / Gamma / Gain / Offset)"]
         CropTool["Kompozisyon Kılavuzları<br/>(Üçler / Altın Oran / Fibonacci)"]
     end
 
-    subgraph IPC ["⚡ Güvenli Yerel IPC & CLI Arayüzü"]
+    subgraph IPC [" Güvenli Yerel IPC & CLI Arayüzü"]
         CLI["omastudio --cli"]
         Sock["Kalıcı Daemon IPC (stdin/stdout JSON satırları)<br/>& Quickshell IPC Protokolü"]
     end
 
-    subgraph Engine ["🦀 Arka Plan Motoru (Rust / Rayon Core)"]
+    subgraph Engine [" Arka Plan Motoru (Rust / Rayon Core)"]
         Decoders["LibRaw FFI Kod Çözücü<br/>(Sony ARW, Fuji RAF, Nikon NEF, Canon CR3, DNG)"]
         RAMCache["Bellekte Sıcak RAW Matrisi<br/>(Sıfır Disk Yeniden Kod Çözümü)"]
         Pipeline["Çok Çekirdekli İşleme Boru Hattı<br/>(Paralel Piksel Matrisi / Rayon)"]
@@ -59,26 +59,26 @@ graph TD
 
 ---
 
-## 🔄 Görüntü İşleme Boru Hattı (RAW Processing Pipeline)
+## Görüntü İşleme Boru Hattı (RAW Processing Pipeline)
 
 Her RAW pikseli, matematiksel doğruluk ve kayıpsız dinamik aralık korunarak aşağıdaki adımlardan geçer:
 
 ```mermaid
 flowchart LR
-    A["📸 RAW Girdi<br/>(Bayer / X-Trans)"] --> B["⚡ LibRaw<br/>Demosaicing"]
-    B --> C["🌡️ Beyaz Ayarı<br/>(Kelvin & Tint)"]
-    C --> D["☀️ Pozlama<br/>(EV Logaritmik)"]
-    D --> E["🎛️ Işık & Dinamik Aralık<br/>(Whites/Blacks/Highlights/Shadows)"]
-    E --> F["🎨 8-Band HSL<br/>Renk Mikseri"]
-    F --> G["🎡 DaVinci 3-Way<br/>Renk Tekerlekleri"]
-    G --> H["🔍 Detay & Optik<br/>(Keskinlik / Denoise / Defringe)"]
-    H --> I["🌈 ICC Profil Çıktısı<br/>(sRGB / AdobeRGB / P3)"]
-    I --> J["💾 Çoklu Dışa Aktarma<br/>(JPEG XL / AVIF / WebP / TIFF / JPEG)"]
+    A[" RAW Girdi<br/>(Bayer / X-Trans)"] --> B[" LibRaw<br/>Demosaicing"]
+    B --> C[" Beyaz Ayarı<br/>(Kelvin & Tint)"]
+    C --> D[" Pozlama<br/>(EV Logaritmik)"]
+    D --> E[" Işık & Dinamik Aralık<br/>(Whites/Blacks/Highlights/Shadows)"]
+    E --> F[" 8-Band HSL<br/>Renk Mikseri"]
+    F --> G[" DaVinci 3-Way<br/>Renk Tekerlekleri"]
+    G --> H[" Detay & Optik<br/>(Keskinlik / Denoise / Defringe)"]
+    H --> I[" ICC Profil Çıktısı<br/>(sRGB / AdobeRGB / P3)"]
+    I --> J[" Çoklu Dışa Aktarma<br/>(JPEG XL / AVIF / WebP / TIFF / JPEG)"]
 ```
 
 ---
 
-## 🌟 Öne Çıkan Özellikler
+## Öne Çıkan Özellikler
 
 ### 1. Kapsamlı RAW & 16-Bit Medium Format (Orta Format) Desteği
 * **Orta Format (Medium Format):** Fujifilm GFX serisi (GFX 100 II, GFX 100S, GFX 50S vb.), Hasselblad (`.3FR`, `.DNG`) ve Phase One 16-bit 100+ MP devasa sensörler.
@@ -124,7 +124,7 @@ Platforma özel çözünürlük, en boy oranı ve algoritma sıkıştırma kayı
 
 ---
 
-## ⚡ Karşılaştırma Matrisi
+## Karşılaştırma Matrisi
 
 | Özellik | OmaStudio | Adobe Lightroom | Darktable | RawTherapee |
 | :--- | :---: | :---: | :---: | :---: |
@@ -138,7 +138,7 @@ Platforma özel çözünürlük, en boy oranı ve algoritma sıkıştırma kayı
 
 ---
 
-## 🚀 Kurulum & Çalıştırma
+## Kurulum & Çalıştırma
 
 ### Sistem Gereksinimleri ve Bağımlılıklar
 * `libraw` (RAW görsel çözme motoru)
@@ -163,7 +163,7 @@ omastudio
 
 ---
 
-## ⌨️ Klavye ve İş Akışı Kısayolları
+## ⌨ Klavye ve İş Akışı Kısayolları
 
 * `Ctrl + O`: RAW fotoğraf açma diyaloğu
 * `Ctrl + S`: Düzenleme tarifini yan dosya olarak kaydetme (`.omaraw`, Mod 0600)
@@ -176,7 +176,7 @@ omastudio
 
 ---
 
-## 🔒 Güvenlik Standartları (`AGENTS.md`)
+## Güvenlik Standartları (`CONTRIBUTING.md`)
 
 OmaStudio, Omarchy Linux resmi güvenlik kılavuzuna koşulsuz olarak uyar:
 1. **İzole Süreç Grupları (`cmd.process_group(0)`):** Harici yardımcı araçlar bağımsız PGID ile çalıştırılır; zaman aşımında RAII `ProcessGroupGuard` ile zombi süreç bırakılmadan SIGTERM ve SIGKILL ile temizlenir.
@@ -186,7 +186,7 @@ OmaStudio, Omarchy Linux resmi güvenlik kılavuzuna koşulsuz olarak uyar:
 
 ---
 
-## ☕ Destek & Sponsorluk
+## Destek & Sponsorluk
 
 OmaStudio'yu faydalı buluyorsanız ve bağımsız açık kaynak Linux yazılım geliştirmesine katkıda bulunmak isterseniz:
 
@@ -194,5 +194,5 @@ OmaStudio'yu faydalı buluyorsanız ve bağımsız açık kaynak Linux yazılım
 
 ---
 
-## 📄 Lisans
+## Lisans
 MIT License © 2026 Ozan Özdil

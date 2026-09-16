@@ -1,4 +1,4 @@
-# OmaStudio 📸
+# OmaStudio
 
 **Quickshell & Rust-Powered Professional RAW Photo Studio for Omarchy Linux**
 
@@ -10,32 +10,32 @@
 [![Platform](https://img.shields.io/badge/Platform-Omarchy%20Linux%20%7C%20Arch%20Linux-1793d1.svg)](https://omarchy.org)
 [![Engine: Rust](https://img.shields.io/badge/Engine-Rust%202021%20%28Rayon%29-dea584.svg)](Cargo.toml)
 [![UI: Quickshell](https://img.shields.io/badge/UI-Quickshell%20%7C%20Qt%206-41cd52.svg)](qml/)
-[![Security: AGENTS.md Compliant](https://img.shields.io/badge/Security-AGENTS.md%20Mode%200600-brightgreen.svg)](AGENTS.md)
+[![Security: CONTRIBUTING.md Compliant](https://img.shields.io/badge/Security-CONTRIBUTING.md%20Mode%200600-brightgreen.svg)](CONTRIBUTING.md)
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy_Me_A_Coffee-Support_Development-FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/ozdil)
 
 ![OmaStudio Preview](preview.png)
 
 ---
 
-## 🏛️ Architecture & Principles
+## Architecture & Principles
 
 OmaStudio employs a high-performance hybrid architecture designed specifically for the modern Linux desktop: The graphical user interface runs at 60+ FPS powered by GPU-accelerated **Quickshell (Qt 6 / QML)**, while the image processing and RAW decoding pipeline is driven by a multi-threaded **Rust (Rayon + LibRaw FFI)** engine.
 
 ```mermaid
 graph TD
-    subgraph UI ["🖥️ User Experience (Quickshell / Qt 6 QML)"]
+    subgraph UI [" User Experience (Quickshell / Qt 6 QML)"]
         Viewport["Canvas Viewport<br/>(Pinch-Zoom / Pan / Rotation)"]
         Inspector["Pro Studio & Simple Modes<br/>(Per-Module Independent Reset)"]
         Wheels["DaVinci 3-Way Wheels<br/>(Lift / Gamma / Gain / Offset)"]
         CropTool["Composition Overlays<br/>(Rule of Thirds / Golden Ratio / Fibonacci)"]
     end
 
-    subgraph IPC ["⚡ Secure Local IPC & CLI Interface"]
+    subgraph IPC [" Secure Local IPC & CLI Interface"]
         CLI["omastudio --cli"]
         Sock["Persistent Daemon IPC (stdin/stdout JSON lines)<br/>& Quickshell IPC Protocol"]
     end
 
-    subgraph Engine ["🦀 Background Engine (Rust / Rayon Core)"]
+    subgraph Engine [" Background Engine (Rust / Rayon Core)"]
         Decoders["LibRaw FFI Decoder<br/>(Sony ARW, Fuji RAF, Nikon NEF, Canon CR3, DNG)"]
         RAMCache["Hot RAW Buffer in RAM<br/>(Zero Disk Re-Decoding)"]
         Pipeline["Multi-Core Processing Pipeline<br/>(Parallel Pixel Matrix / Rayon)"]
@@ -59,26 +59,26 @@ graph TD
 
 ---
 
-## 🔄 RAW Processing Pipeline
+## RAW Processing Pipeline
 
 Every RAW pixel undergoes lossless, mathematically precise transformations to preserve maximum dynamic range:
 
 ```mermaid
 flowchart LR
-    A["📸 RAW Input<br/>(Bayer / X-Trans)"] --> B["⚡ LibRaw<br/>Demosaicing"]
-    B --> C["🌡️ White Balance<br/>(Kelvin & Tint)"]
-    C --> D["☀️ Exposure<br/>(EV Logarithmic)"]
-    D --> E["🎛️ Light & Dynamic Range<br/>(Whites/Blacks/Highlights/Shadows)"]
-    E --> F["🎨 8-Band HSL<br/>Color Mixer"]
-    F --> G["🎡 DaVinci 3-Way<br/>Color Wheels"]
-    G --> H["🔍 Detail & Optics<br/>(Sharpening / Denoise / Defringe)"]
-    H --> I["🌈 ICC Profile Output<br/>(sRGB / AdobeRGB / P3)"]
-    I --> J["💾 Multi-Format Export<br/>(JPEG XL / AVIF / WebP / TIFF / JPEG)"]
+    A[" RAW Input<br/>(Bayer / X-Trans)"] --> B[" LibRaw<br/>Demosaicing"]
+    B --> C[" White Balance<br/>(Kelvin & Tint)"]
+    C --> D[" Exposure<br/>(EV Logarithmic)"]
+    D --> E[" Light & Dynamic Range<br/>(Whites/Blacks/Highlights/Shadows)"]
+    E --> F[" 8-Band HSL<br/>Color Mixer"]
+    F --> G[" DaVinci 3-Way<br/>Color Wheels"]
+    G --> H[" Detail & Optics<br/>(Sharpening / Denoise / Defringe)"]
+    H --> I[" ICC Profile Output<br/>(sRGB / AdobeRGB / P3)"]
+    I --> J[" Multi-Format Export<br/>(JPEG XL / AVIF / WebP / TIFF / JPEG)"]
 ```
 
 ---
 
-## 🌟 Key Features
+## Key Features
 
 ### 1. Comprehensive RAW & 16-Bit Medium Format Support
 * **Medium Format:** Fujifilm GFX series (GFX 100 II, GFX 100S, GFX 50S, etc.), Hasselblad (`.3FR`, `.DNG`), and Phase One 16-bit 100+ MP massive sensors.
@@ -124,7 +124,7 @@ Platform-tailored resolution, aspect ratios, and micro-contrast presets engineer
 
 ---
 
-## ⚡ Feature Comparison
+## Feature Comparison
 
 | Feature | OmaStudio | Adobe Lightroom | Darktable | RawTherapee |
 | :--- | :---: | :---: | :---: | :---: |
@@ -138,7 +138,7 @@ Platform-tailored resolution, aspect ratios, and micro-contrast presets engineer
 
 ---
 
-## 🚀 Installation & Usage
+## Installation & Usage
 
 ### System Requirements & Dependencies
 * `libraw` (RAW image decoding engine)
@@ -163,7 +163,7 @@ omastudio
 
 ---
 
-## ⌨️ Keyboard Shortcuts & Workflow
+## ⌨ Keyboard Shortcuts & Workflow
 
 * `Ctrl + O`: Open RAW image dialog
 * `Ctrl + S`: Save adjustment recipe sidecar (`.omaraw`, Mode 0600)
@@ -176,7 +176,7 @@ omastudio
 
 ---
 
-## 🔒 Security Standards (`AGENTS.md`)
+## Security Standards (`CONTRIBUTING.md`)
 
 OmaStudio strictly conforms to the Omarchy Linux Security Standards:
 1. **Isolated Process Groups (`cmd.process_group(0)`):** Subprocesses run in dedicated PGIDs; on timeout, RAII `ProcessGroupGuard` ensures clean cleanup with SIGTERM and SIGKILL, leaving zero zombies.
@@ -186,7 +186,7 @@ OmaStudio strictly conforms to the Omarchy Linux Security Standards:
 
 ---
 
-## ☕ Support & Sponsorship
+## Support & Sponsorship
 
 If you find OmaStudio valuable and want to fuel independent Linux software development:
 
@@ -194,5 +194,5 @@ If you find OmaStudio valuable and want to fuel independent Linux software devel
 
 ---
 
-## 📄 License
+## License
 MIT License © 2026 Ozan Özdil
