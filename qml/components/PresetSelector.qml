@@ -27,14 +27,14 @@ ColumnLayout {
             Layout.fillWidth: true
         }
 
-        // Reset preset button
+        // Reset preset button (always accessible)
         Rectangle {
-            visible: root.activePreset !== ""
-            implicitWidth: 42
-            implicitHeight: 16
+            visible: true
+            implicitWidth: 46
+            implicitHeight: 18
             radius: Theme.radiusSm
-            color: "transparent"
-            border.color: Theme.textDim
+            color: resetPresetMouse.containsMouse ? Qt.rgba(Theme.accentMagenta.r, Theme.accentMagenta.g, Theme.accentMagenta.b, 0.2) : (root.activePreset !== "" ? Qt.rgba(Theme.accentMagenta.r, Theme.accentMagenta.g, Theme.accentMagenta.b, 0.1) : "transparent")
+            border.color: root.activePreset !== "" ? Theme.accentMagenta : Theme.border
             border.width: 1
 
             Text {
@@ -43,15 +43,14 @@ ColumnLayout {
                 textFormat: Text.PlainText
                 font.pixelSize: 8
                 font.weight: Font.DemiBold
-                color: Theme.textDim
+                color: root.activePreset !== "" ? Theme.accentMagenta : Theme.textDim
             }
 
             MouseArea {
+                id: resetPresetMouse
                 anchors.fill: parent
                 cursorShape: Qt.PointingHandCursor
                 hoverEnabled: true
-                onEntered: parent.border.color = Theme.accentMagenta
-                onExited: parent.border.color = Theme.textDim
                 onClicked: {
                     root.activePreset = ""
                     root.resetPreset()

@@ -173,8 +173,6 @@ pub fn export_photo<P: AsRef<Path>>(
             let (code, _, _) = run_bounded_command(cmd, Duration::from_secs(60))
                 .map_err(|e| format!("Failed to execute avifenc: {}", e))?;
 
-            let _ = fs::remove_file(&tmp_png);
-
             if code != 0 {
                 let mut f_cmd = secure_command("ffmpeg");
                 f_cmd.arg("-y")
@@ -183,6 +181,8 @@ pub fn export_photo<P: AsRef<Path>>(
                     .arg(&final_dest);
                 let _ = run_bounded_command(f_cmd, Duration::from_secs(30));
             }
+
+            let _ = fs::remove_file(&tmp_png);
         }
         "webp" => {
             let file = fs::File::create(&final_dest)

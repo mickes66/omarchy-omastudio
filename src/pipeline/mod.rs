@@ -140,6 +140,19 @@ pub fn process_buffer_16_to_8(
     channels: u32,
     recipe: &Recipe,
 ) -> (Vec<u8>, HistogramData) {
+    process_buffer_16_to_8_ex(input, width, height, channels, recipe, false, false)
+}
+
+/// Extended 16-to-8 processing supporting zebra highlight & shadow clipping mask overlays
+pub fn process_buffer_16_to_8_ex(
+    input: &[u16],
+    width: u32,
+    height: u32,
+    channels: u32,
+    recipe: &Recipe,
+    highlight_mask: bool,
+    shadow_mask: bool,
+) -> (Vec<u8>, HistogramData) {
     let ch = channels as usize;
     let w = width as usize;
     let h = height as usize;
@@ -252,6 +265,27 @@ pub fn process_buffer_16_to_8(
         });
 
     let hist = compute_histogram(&output, ch);
+
+    // Visual clipping overlay: Red for highlights (>= 254), Blue for shadows (<= 1)
+    if highlight_mask || shadow_mask {
+        output
+            .par_chunks_mut(ch)
+            .for_each(|px| {
+                let r = px[0];
+                let g = px[1];
+                let b = px[2];
+                if highlight_mask && (r >= 254 || g >= 254 || b >= 254) {
+                    px[0] = 255;
+                    px[1] = 0;
+                    px[2] = 0;
+                } else if shadow_mask && (r <= 1 && g <= 1 && b <= 1) {
+                    px[0] = 0;
+                    px[1] = 80;
+                    px[2] = 255;
+                }
+            });
+    }
+
     (output, hist)
 }
 
@@ -431,7 +465,21 @@ pub fn process_split_comparison_16_to_8(
     recipe: &Recipe,
     split_ratio: f32,
 ) -> (Vec<u8>, HistogramData) {
-    let (processed, hist) = process_buffer_16_to_8(input, width, height, channels, recipe);
+    process_split_comparison_16_to_8_ex(input, width, height, channels, recipe, split_ratio, false, false)
+}
+
+/// Extended Before / After split comparison buffer with clipping mask overlay support
+pub fn process_split_comparison_16_to_8_ex(
+    input: &[u16],
+    width: u32,
+    height: u32,
+    channels: u32,
+    recipe: &Recipe,
+    split_ratio: f32,
+    highlight_mask: bool,
+    shadow_mask: bool,
+) -> (Vec<u8>, HistogramData) {
+    let (processed, hist) = process_buffer_16_to_8_ex(input, width, height, channels, recipe, highlight_mask, shadow_mask);
     let ch = channels as usize;
     let w = width as usize;
     let split_x = ((width as f32) * split_ratio.clamp(0.0, 1.0)) as usize;

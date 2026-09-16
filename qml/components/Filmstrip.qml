@@ -123,8 +123,8 @@ Rectangle {
                     anchors.centerIn: parent
                     spacing: 4
                     Text {
-                        text: "⬆"
-                        textFormat: Text.PlainText
+                        text: Theme.iconArrowUp
+                        font.family: Theme.iconFont
                         font.pixelSize: 10
                         color: Theme.accentCyan
                     }
@@ -214,6 +214,16 @@ Rectangle {
             spacing: 8
             clip: true
             model: root.photoList
+
+            WheelHandler {
+                id: filmstripWheel
+                target: null
+                onWheel: function(event) {
+                    var delta = event.angleDelta.y !== 0 ? event.angleDelta.y : (event.pixelDelta.y !== 0 ? event.pixelDelta.y : (event.angleDelta.x !== 0 ? event.angleDelta.x : event.pixelDelta.x));
+                    listView.contentX = Math.max(0, Math.min(Math.max(0, listView.contentWidth - listView.width), listView.contentX - delta));
+                    event.accepted = true;
+                }
+            }
 
             delegate: Rectangle {
                 width: 90

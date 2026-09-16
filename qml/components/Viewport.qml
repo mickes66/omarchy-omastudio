@@ -286,7 +286,7 @@ Rectangle {
 
                         Text {
                             anchors.centerIn: parent
-                            text: "◀ ▶"
+                            text: "< | >"
                             textFormat: Text.PlainText
                             font.pixelSize: 8
                             font.weight: Font.Bold
@@ -524,7 +524,7 @@ Rectangle {
         WheelHandler {
             id: wheelHandler
             target: null
-            acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+            grabPermissions: PointerHandler.CanTakeOverFromItems | PointerHandler.ApprovesTakeOverByAnything
             onWheel: function(event) {
                 var curX = (typeof event.x !== "undefined") ? event.x
                          : (event.position ? event.position.x
@@ -534,25 +534,32 @@ Rectangle {
                          : (wheelHandler.point ? wheelHandler.point.position.y : root.height / 2));
 
                 if (event.modifiers & (Qt.AltModifier | Qt.MetaModifier)) {
-                    // Option/Alt key + wheel = smooth micro-rotation (1.5° per step)
+                    // Option/Alt key + wheel = smooth micro-rotation (1.5 deg per step)
                     var rotDelta = event.angleDelta.y !== 0 ? (event.angleDelta.y / 120.0) * 1.5 : (event.pixelDelta.y * 0.05);
                     var newAngle = root.rotationAngle + rotDelta;
                     while (newAngle > 180.0) newAngle -= 360.0;
                     while (newAngle <= -180.0) newAngle += 360.0;
                     root.rotationAngle = newAngle;
                     root.rotationChangedByUser(root.rotationAngle);
-                } else if (event.angleDelta.y !== 0) {
-                    // Natural mouse wheel vertical zoom centered at cursor position
-                    var steps = event.angleDelta.y / 120.0;
-                    var zoomMult = Math.pow(1.15, steps);
-                    root.zoomRelativeAt(curX, curY, zoomMult);
-                } else if (event.pixelDelta.y !== 0 || event.pixelDelta.x !== 0) {
-                    // Touchpad 2-finger continuous panning
-                    root.panX += event.pixelDelta.x * 0.75;
-                    root.panY += event.pixelDelta.y * 0.75;
+                } else if (event.modifiers & Qt.ShiftModifier) {
+                    // Shift + wheel = horizontal pan
+                    var panDelta = event.angleDelta.y !== 0 ? event.angleDelta.y : (event.pixelDelta.y !== 0 ? event.pixelDelta.y : event.pixelDelta.x);
+                    root.panX += panDelta * 0.75;
                     root.clampPan();
                     root.updateNormCoordinates();
+                } else {
+                    // Default mouse wheel: smooth zoom in / zoom out centered at cursor position
+                    var dy = event.angleDelta.y !== 0 ? (event.angleDelta.y / 120.0) : (event.pixelDelta.y / 40.0);
+                    if (Math.abs(dy) > 0.001) {
+                        var zoomMult = Math.pow(1.15, dy);
+                        root.zoomRelativeAt(curX, curY, zoomMult);
+                    } else if (event.pixelDelta.x !== 0) {
+                        root.panX += event.pixelDelta.x * 0.75;
+                        root.clampPan();
+                        root.updateNormCoordinates();
+                    }
                 }
+                event.accepted = true;
             }
         }
 
@@ -989,7 +996,7 @@ Rectangle {
                 color: Theme.accent
                 Text {
                     anchors.centerIn: parent
-                    text: "DONE ✓"
+                    text: "DONE [OK]"
                     textFormat: Text.PlainText
                     font.pixelSize: 9
                     font.weight: Font.Bold
@@ -1048,12 +1055,63 @@ Rectangle {
         }
     }
 
+    // Floating Clipping Warning Badges (Top Right)
+    RowLayout {
+        anchors.top: parent.top
+        anchors.right: parent.right
+        anchors.margins: 14
+        spacing: 6
+        z: 25
+
+        Rectangle {
+            visible: root.showShadowMask
+            implicitWidth: shadowClipTxt.implicitWidth + 12
+            implicitHeight: 22
+            radius: 4
+            color: Qt.rgba(Theme.shadowClip.r, Theme.shadowClip.g, Theme.shadowClip.b, 0.85)
+            border.color: Theme.shadowClip
+            border.width: 1
+
+            Text {
+                id: shadowClipTxt
+                anchors.centerIn: parent
+                text: "[S] SHADOW CLIPPING (BLUE)"
+                textFormat: Text.PlainText
+                font.pixelSize: 9
+                font.family: Theme.monoFont
+                font.weight: Font.Bold
+                color: "#ffffff"
+            }
+        }
+
+        Rectangle {
+            visible: root.showHighlightMask
+            implicitWidth: highClipTxt.implicitWidth + 12
+            implicitHeight: 22
+            radius: 4
+            color: Qt.rgba(Theme.highlightClip.r, Theme.highlightClip.g, Theme.highlightClip.b, 0.85)
+            border.color: Theme.highlightClip
+            border.width: 1
+
+            Text {
+                id: highClipTxt
+                anchors.centerIn: parent
+                text: "[H] HIGHLIGHT CLIPPING (RED)"
+                textFormat: Text.PlainText
+                font.pixelSize: 9
+                font.family: Theme.monoFont
+                font.weight: Font.Bold
+                color: "#ffffff"
+            }
+        }
+    }
+
     // Touchpad & Gesture Quick Help Pill
     Rectangle {
         anchors.bottom: parent.bottom
         anchors.right: parent.right
         anchors.margins: 12
-        implicitWidth: helpText.implicitWidth + 14
+        implicitWidth: helpRow.implicitWidth + 14
         implicitHeight: 22
         radius: 4
         color: Qt.rgba(0, 0, 0, 0.75)
@@ -1061,14 +1119,25 @@ Rectangle {
         border.width: 1
         z: 20
 
-        Text {
-            id: helpText
+        RowLayout {
+            id: helpRow
             anchors.centerIn: parent
-            text: "👆 Pinch: Zoom • 2-Finger Twist: Rotate • 2-Finger Pan • Double-Tap: Reset"
-            textFormat: Text.PlainText
-            font.pixelSize: 9
-            font.family: Theme.monoFont
-            color: Theme.textMuted
+            spacing: 6
+
+            Text {
+                text: Theme.iconSliders
+                font.family: Theme.iconFont
+                font.pixelSize: 10
+                color: Theme.accent
+            }
+
+            Text {
+                text: "Pinch: Zoom | 2-Finger Twist: Rotate | 2-Finger Pan | Double-Tap: Reset"
+                textFormat: Text.PlainText
+                font.pixelSize: 9
+                font.family: Theme.monoFont
+                color: Theme.textMuted
+            }
         }
     }
 

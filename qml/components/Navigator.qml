@@ -47,7 +47,7 @@ Rectangle {
             // Preset Zoom Buttons: FIT, 100%, 200%, 300%
             Repeater {
                 model: [
-                    { label: "FIT", val: 1.0 },
+                    { label: "FIT", val: 0.0 },
                     { label: "100%", val: 1.0 },
                     { label: "200%", val: 2.0 },
                     { label: "300%", val: 3.0 }
@@ -57,7 +57,7 @@ Rectangle {
                     implicitWidth: lbl.implicitWidth + 10
                     implicitHeight: 18
                     radius: 3
-                    property bool isCur: (modelData.label === "FIT" && root.zoomFactor <= 1.05) || (Math.abs(root.zoomFactor - modelData.val) < 0.1 && modelData.label !== "FIT")
+                    property bool isCur: (modelData.label === "FIT" && root.zoomFactor <= 1.05) || (modelData.label !== "FIT" && Math.abs(root.zoomFactor - modelData.val) < 0.1 && root.zoomFactor > 1.05)
                     color: isCur ? Theme.accent : Theme.bgCard
                     border.color: isCur ? Theme.accent : Theme.border
 

@@ -10,7 +10,10 @@ pub mod security;
 use ai::{ai_auto_enhance, ai_classify_scene, ai_optimize_for_social};
 use export::{export_photo, ExportOptions};
 use gdrive::{fetch_remote_raw, is_gdrive_available, list_gdrive_folder};
-use pipeline::{process_buffer_16_to_8, process_split_comparison_16_to_8};
+use pipeline::{
+    process_buffer_16_to_8, process_buffer_16_to_8_ex, process_split_comparison_16_to_8,
+    process_split_comparison_16_to_8_ex,
+};
 use raw::RawImage;
 use recipe::{Catalog, CatalogItem, Recipe};
 use serde::{Deserialize, Serialize};
@@ -627,6 +630,10 @@ struct DaemonCommand {
     out: Option<String>,
     #[serde(default)]
     options: Option<ExportOptions>,
+    #[serde(default)]
+    highlight_mask: Option<bool>,
+    #[serde(default)]
+    shadow_mask: Option<bool>,
 }
 
 fn run_daemon() {
@@ -768,22 +775,29 @@ fn run_daemon() {
                     }
                 };
 
+                let highlight_mask = cmd_obj.highlight_mask.unwrap_or(false);
+                let shadow_mask = cmd_obj.shadow_mask.unwrap_or(false);
+
                 let (final_buf, hist) = if split > 0.001 {
-                    process_split_comparison_16_to_8(
+                    process_split_comparison_16_to_8_ex(
                         buffer,
                         width,
                         height,
                         channels,
                         &recipe,
                         split,
+                        highlight_mask,
+                        shadow_mask,
                     )
                 } else {
-                    process_buffer_16_to_8(
+                    process_buffer_16_to_8_ex(
                         buffer,
                         width,
                         height,
                         channels,
                         &recipe,
+                        highlight_mask,
+                        shadow_mask,
                     )
                 };
 

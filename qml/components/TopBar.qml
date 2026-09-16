@@ -173,6 +173,59 @@ Rectangle {
             }
         }
 
+        // Undo / Redo Quick Actions
+        RowLayout {
+            spacing: 2
+
+            Rectangle {
+                implicitWidth: 28
+                implicitHeight: 28
+                radius: 4
+                color: undoMouse.containsMouse ? Theme.bgCardHover : Theme.bgCard
+                border.color: Theme.border
+
+                Text {
+                    anchors.centerIn: parent
+                    text: Theme.iconUndo
+                    font.family: Theme.iconFont
+                    font.pixelSize: 11
+                    color: undoMouse.containsMouse ? Theme.accent : Theme.textMain
+                }
+
+                MouseArea {
+                    id: undoMouse
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    hoverEnabled: true
+                    onClicked: root.undoClicked()
+                }
+            }
+
+            Rectangle {
+                implicitWidth: 28
+                implicitHeight: 28
+                radius: 4
+                color: redoMouse.containsMouse ? Theme.bgCardHover : Theme.bgCard
+                border.color: Theme.border
+
+                Text {
+                    anchors.centerIn: parent
+                    text: Theme.iconRedo
+                    font.family: Theme.iconFont
+                    font.pixelSize: 11
+                    color: redoMouse.containsMouse ? Theme.accent : Theme.textMain
+                }
+
+                MouseArea {
+                    id: redoMouse
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    hoverEnabled: true
+                    onClicked: root.redoClicked()
+                }
+            }
+        }
+
         // Before / After Split Button (A | B)
         Rectangle {
             implicitWidth: 70
@@ -191,7 +244,7 @@ Rectangle {
                     color: root.isSplitView ? Theme.accentCyan : Theme.textMuted
                 }
                 Text {
-                    text: "A ❘ B"
+                    text: "A | B"
                     textFormat: Text.PlainText
                     font.pixelSize: 10
                     font.weight: Font.DemiBold
@@ -314,9 +367,10 @@ Rectangle {
 
             Text {
                 anchors.centerIn: parent
-                text: "☕"
-                textFormat: Text.PlainText
+                text: Theme.iconCoffee
+                font.family: Theme.iconFont
                 font.pixelSize: 13
+                color: mouseCoffee.containsMouse ? "#FFDD00" : Theme.textMain
             }
 
             MouseArea {

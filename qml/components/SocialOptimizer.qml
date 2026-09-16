@@ -27,14 +27,14 @@ ColumnLayout {
             Layout.fillWidth: true
         }
 
-        // Reset social preset button
+        // Reset social preset button (always accessible)
         Rectangle {
-            visible: root.activePlatform !== ""
-            implicitWidth: 42
-            implicitHeight: 16
+            visible: true
+            implicitWidth: 46
+            implicitHeight: 18
             radius: Theme.radiusSm
-            color: "transparent"
-            border.color: Theme.accentCyan
+            color: resetSocialMouse.containsMouse ? Qt.rgba(Theme.accentCyan.r, Theme.accentCyan.g, Theme.accentCyan.b, 0.2) : (root.activePlatform !== "" ? Qt.rgba(Theme.accentCyan.r, Theme.accentCyan.g, Theme.accentCyan.b, 0.1) : "transparent")
+            border.color: root.activePlatform !== "" ? Theme.accentCyan : Theme.border
             border.width: 1
 
             Text {
@@ -43,19 +43,14 @@ ColumnLayout {
                 textFormat: Text.PlainText
                 font.pixelSize: 8
                 font.weight: Font.DemiBold
-                color: Theme.accentCyan
+                color: root.activePlatform !== "" ? Theme.accentCyan : Theme.textDim
             }
 
             MouseArea {
+                id: resetSocialMouse
                 anchors.fill: parent
                 cursorShape: Qt.PointingHandCursor
                 hoverEnabled: true
-                onEntered: {
-                    parent.color = Qt.rgba(Theme.accentCyan.r, Theme.accentCyan.g, Theme.accentCyan.b, 0.15)
-                }
-                onExited: {
-                    parent.color = "transparent"
-                }
                 onClicked: {
                     root.activePlatform = ""
                     root.resetSocial()
@@ -72,12 +67,12 @@ ColumnLayout {
         columnSpacing: 6
 
         property var platforms: [
-            { id: "ig", name: "Instagram Feed", aspect: "4:5 • 1080x1350", tag: "Max Screen", col: Theme.accentMagenta },
-            { id: "story", name: "Stories / Reels", aspect: "9:16 • 1080x1920", tag: "Full Mobile", col: Theme.accentOrange },
-            { id: "x", name: "X / Twitter", aspect: "16:9 • 1200x675", tag: "Crisp Feed", col: Theme.accent },
-            { id: "ig_square", name: "Classic Square", aspect: "1:1 • 1080x1080", tag: "Grid Post", col: Theme.accentYellow },
-            { id: "fb", name: "Facebook HD", aspect: "1.91:1 • 2048px", tag: "High Res", col: Theme.accentCyan },
-            { id: "yt", name: "YouTube Thumb", aspect: "16:9 • 1280x720", tag: "High CTR", col: Theme.accentGreen }
+            { id: "ig", name: "Instagram Feed", aspect: "4:5 / 1080x1350", tag: "Max Screen", col: Theme.accentMagenta },
+            { id: "story", name: "Stories / Reels", aspect: "9:16 / 1080x1920", tag: "Full Mobile", col: Theme.accentOrange },
+            { id: "x", name: "X / Twitter", aspect: "16:9 / 1200x675", tag: "Crisp Feed", col: Theme.accent },
+            { id: "ig_square", name: "Classic Square", aspect: "1:1 / 1080x1080", tag: "Grid Post", col: Theme.accentYellow },
+            { id: "fb", name: "Facebook HD", aspect: "1.91:1 / 2048px", tag: "High Res", col: Theme.accentCyan },
+            { id: "yt", name: "YouTube Thumb", aspect: "16:9 / 1280x720", tag: "High CTR", col: Theme.accentGreen }
         ]
 
         Repeater {

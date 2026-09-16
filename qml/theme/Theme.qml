@@ -68,6 +68,8 @@ QtObject {
     readonly property string iconExpand: "\uf065"
     readonly property string iconCompress: "\uf066"
     readonly property string iconCrop: "\uf125"
+    readonly property string iconCoffee: "\uf0f4"
+    readonly property string iconArrowUp: "\uf062"
 
     // Filesystem Paths for Omarchy System Theme
     readonly property string homeDir: Quickshell.env("HOME")

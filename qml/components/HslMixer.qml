@@ -103,28 +103,73 @@ ColumnLayout {
         }
     }
 
-    // Active color title
+    // Active color title and Resets
     RowLayout {
         Layout.fillWidth: true
+        spacing: 6
+
         Text {
             text: root.channelNames[root.activeChannel] + " Channel"
             textFormat: Text.PlainText
             font.pixelSize: 11
             font.weight: Font.DemiBold
             color: root.channelColors[root.activeChannel]
+            Layout.fillWidth: true
         }
-        Item { Layout.fillWidth: true }
-        Text {
-            text: "Double click to reset channel"
-            textFormat: Text.PlainText
-            font.pixelSize: 10
-            color: Theme.textDim
+
+        // Reset Channel Button
+        Rectangle {
+            implicitWidth: resetChText.implicitWidth + 10
+            implicitHeight: 18
+            radius: 4
+            color: resetChMouse.containsMouse ? Theme.bgCardHover : "transparent"
+            border.color: Theme.border
+            border.width: 1
+
+            Text {
+                id: resetChText
+                anchors.centerIn: parent
+                text: "RESET CH"
+                textFormat: Text.PlainText
+                font.pixelSize: 8
+                font.weight: Font.Bold
+                color: Theme.textDim
+            }
 
             MouseArea {
+                id: resetChMouse
                 anchors.fill: parent
                 cursorShape: Qt.PointingHandCursor
                 hoverEnabled: true
-                onDoubleClicked: root.resetCurrentChannel()
+                onClicked: root.resetCurrentChannel()
+            }
+        }
+
+        // Reset All Channels Button
+        Rectangle {
+            implicitWidth: resetAllHslText.implicitWidth + 10
+            implicitHeight: 18
+            radius: 4
+            color: resetAllHslMouse.containsMouse ? Theme.bgCardHover : "transparent"
+            border.color: Theme.border
+            border.width: 1
+
+            Text {
+                id: resetAllHslText
+                anchors.centerIn: parent
+                text: "RESET ALL"
+                textFormat: Text.PlainText
+                font.pixelSize: 8
+                font.weight: Font.Bold
+                color: Theme.textDim
+            }
+
+            MouseArea {
+                id: resetAllHslMouse
+                anchors.fill: parent
+                cursorShape: Qt.PointingHandCursor
+                hoverEnabled: true
+                onClicked: root.resetAll()
             }
         }
     }

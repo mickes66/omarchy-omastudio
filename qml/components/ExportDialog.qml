@@ -401,7 +401,7 @@ Rectangle {
                     color: root.isExporting ? Theme.textMuted : Theme.bgBase
                 }
                 Text {
-                    text: root.isExporting ? "Exporting Full Resolution..." : "Start Export (" + root.selectedFormat.toUpperCase() + " • " + root.selectedIcc + ")"
+                    text: root.isExporting ? "Exporting Full Resolution..." : "Start Export (" + root.selectedFormat.toUpperCase() + " / " + root.selectedIcc + ")"
                     textFormat: Text.PlainText
                     font.pixelSize: 13
                     font.weight: Font.Bold

@@ -41,9 +41,37 @@ ColumnLayout {
         root.wheelChanged(root.rgbOffset, root.lumaOffset);
     }
 
+    function syncPuckFromRgb() {
+        if (wheelMouse.pressed) return;
+        var r = root.rgbOffset && root.rgbOffset.length >= 3 ? root.rgbOffset[0] : 0.0;
+        var g = root.rgbOffset && root.rgbOffset.length >= 3 ? root.rgbOffset[1] : 0.0;
+        var b = root.rgbOffset && root.rgbOffset.length >= 3 ? root.rgbOffset[2] : 0.0;
+
+        var cx = wheelContainer.width / 2;
+        var cy = wheelContainer.height / 2;
+        var maxR = wheelContainer.width / 2 - 6;
+
+        var xVec = r - 0.5 * g - 0.5 * b;
+        var yVec = (Math.sqrt(3) / 2.0) * (g - b);
+        var mag = Math.sqrt(xVec * xVec + yVec * yVec);
+
+        if (mag < 0.001) {
+            puck.x = cx - puck.width / 2;
+            puck.y = cy - puck.height / 2;
+        } else {
+            var angle = Math.atan2(-yVec, xVec);
+            var normDist = Math.min(1.0, mag);
+            puck.x = cx + Math.cos(angle) * (normDist * maxR) - puck.width / 2;
+            puck.y = cy + Math.sin(angle) * (normDist * maxR) - puck.height / 2;
+        }
+    }
+
+    onRgbOffsetChanged: syncPuckFromRgb()
+
     function resetWheel() {
         root.rgbOffset = [0.0, 0.0, 0.0];
         root.lumaOffset = 0.0;
+        lumaSlider.value = 0.0;
         puck.x = wheelContainer.width / 2 - puck.width / 2;
         puck.y = wheelContainer.height / 2 - puck.height / 2;
         root.wheelChanged(root.rgbOffset, root.lumaOffset);
@@ -65,16 +93,16 @@ ColumnLayout {
 
         // Reset Button
         Rectangle {
-            implicitWidth: 16
-            implicitHeight: 16
-            radius: 8
+            implicitWidth: 18
+            implicitHeight: 18
+            radius: 9
             color: resetMouse.containsMouse ? Theme.bgCardHover : "transparent"
             Text {
                 anchors.centerIn: parent
-                text: "↺"
-                textFormat: Text.PlainText
-                font.pixelSize: 11
-                color: Theme.textDim
+                text: Theme.iconRotateLeft
+                font.family: Theme.iconFont
+                font.pixelSize: 10
+                color: resetMouse.containsMouse ? root.wheelAccent : Theme.textDim
             }
             MouseArea {
                 id: resetMouse
@@ -264,6 +292,13 @@ ColumnLayout {
                 root.lumaOffset = lumaSlider.value;
                 root.wheelChanged(root.rgbOffset, root.lumaOffset);
             }
+        }
+
+        Binding {
+            target: lumaSlider
+            property: "value"
+            value: root.lumaOffset
+            when: !lumaSlider.pressed
         }
 
         Text {

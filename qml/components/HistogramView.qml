@@ -37,7 +37,7 @@ Rectangle {
             Text {
                 id: shadowText
                 anchors.centerIn: parent
-                text: "▼ " + (root.histData ? root.histData.shadow_clipping_percent.toFixed(1) + "%" : "0.0%")
+                text: "[S] " + (root.histData ? root.histData.shadow_clipping_percent.toFixed(1) + "%" : "0.0%")
                 textFormat: Text.PlainText
                 font.pixelSize: 10
                 font.family: Theme.monoFont
@@ -78,7 +78,7 @@ Rectangle {
             Text {
                 id: highText
                 anchors.centerIn: parent
-                text: "▲ " + (root.histData ? root.histData.highlight_clipping_percent.toFixed(1) + "%" : "0.0%")
+                text: "[H] " + (root.histData ? root.histData.highlight_clipping_percent.toFixed(1) + "%" : "0.0%")
                 textFormat: Text.PlainText
                 font.pixelSize: 10
                 font.family: Theme.monoFont

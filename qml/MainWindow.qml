@@ -99,21 +99,78 @@ Rectangle {
         onTriggered: root.toastMessage = ""
     }
 
+    // Undo / Redo History Stack
+    property var undoStack: []
+    property var redoStack: []
+    property bool isPerformingUndoRedo: false
+
+    function pushUndoState() {
+        if (root.isPerformingUndoRedo) return;
+        var r = root.buildRecipeObject();
+        var stack = root.undoStack.slice();
+        if (stack.length >= 50) stack.shift();
+        stack.push(r);
+        root.undoStack = stack;
+        root.redoStack = [];
+    }
+
+    function undo() {
+        if (root.undoStack.length === 0) {
+            root.showToast("[Undo] No previous actions", Theme.textDim);
+            return;
+        }
+        root.isPerformingUndoRedo = true;
+        var cur = root.buildRecipeObject();
+        var rStack = root.redoStack.slice();
+        rStack.push(cur);
+        root.redoStack = rStack;
+
+        var uStack = root.undoStack.slice();
+        var prev = uStack.pop();
+        root.undoStack = uStack;
+
+        root.applyRecipeObject(prev);
+        root.isPerformingUndoRedo = false;
+        root.showToast("[OK] Undo (Ctrl+Z)", Theme.accentCyan);
+    }
+
+    function redo() {
+        if (root.redoStack.length === 0) {
+            root.showToast("[Redo] No actions to redo", Theme.textDim);
+            return;
+        }
+        root.isPerformingUndoRedo = true;
+        var cur = root.buildRecipeObject();
+        var uStack = root.undoStack.slice();
+        uStack.push(cur);
+        root.undoStack = uStack;
+
+        var rStack = root.redoStack.slice();
+        var next = rStack.pop();
+        root.redoStack = rStack;
+
+        root.applyRecipeObject(next);
+        root.isPerformingUndoRedo = false;
+        root.showToast("[OK] Redo (Ctrl+Shift+Z)", Theme.accentCyan);
+    }
+
     function copyRecipe() {
         root.copiedRecipe = root.buildRecipeObject();
-        root.showToast("✓ Adjustments Copied (Ctrl+Shift+C)", Theme.accentGreen);
+        root.showToast("[OK] Adjustments Copied (Ctrl+Shift+C)", Theme.accentGreen);
     }
 
     function pasteRecipe() {
         if (!root.copiedRecipe) {
-            root.showToast("✕ No adjustments in clipboard", Theme.accentMagenta);
+            root.showToast("[ERR] No adjustments in clipboard", Theme.accentMagenta);
             return;
         }
+        root.pushUndoState();
         root.applyRecipeObject(root.copiedRecipe);
-        root.showToast("✓ Adjustments Pasted (Ctrl+Shift+V)", Theme.accentGreen);
+        root.showToast("[OK] Adjustments Pasted (Ctrl+Shift+V)", Theme.accentGreen);
     }
 
     function resetRecipe() {
+        root.pushUndoState();
         root.wbTemp = 5500.0;
         root.wbTint = 0.0;
         root.expValue = 0.0;
@@ -161,11 +218,12 @@ Rectangle {
         if (typeof socialOpt !== "undefined" && socialOpt) socialOpt.activePlatform = "";
         if (typeof hslMixer !== "undefined" && hslMixer) hslMixer.resetAll();
         if (typeof colorWheels !== "undefined" && colorWheels) colorWheels.resetAllWheels();
-        root.showToast("✓ Reset to defaults (Ctrl+R)", Theme.textDim);
+        root.showToast("[OK] Reset to defaults (Ctrl+R)", Theme.textDim);
         root.requestRender();
     }
 
     function resetSocialOptimization() {
+        root.pushUndoState();
         root.cropX = 0.0;
         root.cropY = 0.0;
         root.cropW = 1.0;
@@ -181,7 +239,7 @@ Rectangle {
             socialOpt.activePlatform = "";
         }
         root.requestRender();
-        root.showToast("✓ AI Social Framing & Adjustments Reset", Theme.accentCyan);
+        root.showToast("[OK] AI Social Framing & Adjustments Reset", Theme.accentCyan);
     }
 
     function buildRecipeObject() {
@@ -312,9 +370,9 @@ Rectangle {
             if (!resp.success) {
                 console.warn("Daemon returned error for action " + resp.action + ": " + resp.error);
                 if (resp.action === "load") {
-                    root.showToast("✕ Failed to load RAW: " + (resp.error || "Unknown error"), Theme.highlightClip);
+                    root.showToast("[ERR] Failed to load RAW: " + (resp.error || "Unknown error"), Theme.highlightClip);
                 } else if (resp.action === "ai_auto" || resp.action === "ai_social") {
-                    root.showToast("✕ " + (resp.error || "AI action failed"), Theme.highlightClip);
+                    root.showToast("[ERR] " + (resp.error || "AI action failed"), Theme.highlightClip);
                 }
                 return;
             }
@@ -338,17 +396,17 @@ Rectangle {
                 if (data) {
                     root.applyRecipeObject(data.recipe);
                     root.activeScene = data.scene;
-                    root.showToast("✓ AI Auto Tone Applied", Theme.accentCyan);
+                    root.showToast("[OK] AI Auto Tone Applied", Theme.accentCyan);
                 }
             } else if (act === "ai_social") {
                 if (data) {
                     if (data.recipe) {
                         root.applyRecipeObject(data.recipe);
                     }
-                    root.showToast("✓ " + data.platform + " applied (" + data.target_resolution + ")", Theme.accentCyan);
+                    root.showToast("[OK] " + data.platform + " applied (" + data.target_resolution + ")", Theme.accentCyan);
                 }
             } else if (act === "save_recipe") {
-                root.showToast("✓ Recipe sidecar saved", Theme.accentGreen);
+                root.showToast("[OK] Recipe sidecar saved", Theme.accentGreen);
             }
         } catch(e) {
             console.error("Error parsing daemon message:", e, line);
@@ -363,7 +421,8 @@ Rectangle {
     }
 
     function triggerAiAuto() {
-        root.showToast("⚡ AI analyzing dynamic range & scene...", Theme.accentCyan);
+        root.pushUndoState();
+        root.showToast("[AI] Analyzing dynamic range & scene...", Theme.accentCyan);
         root.sendDaemonCommand({ cmd: "ai_auto" });
     }
 
@@ -385,7 +444,9 @@ Rectangle {
                 root.sendDaemonCommand({
                     cmd: "adjust",
                     recipe: root.buildRecipeObject(),
-                    split: splitVal
+                    split: splitVal,
+                    highlight_mask: viewport.showHighlightMask,
+                    shadow_mask: viewport.showShadowMask
                 });
             }
         }
@@ -443,12 +504,12 @@ Rectangle {
                 try {
                     var resp = JSON.parse(text);
                     if (resp.success && resp.data) {
-                        exportDialog.exportStatusText = "✓ Saved to: " + resp.data.exported_path;
+                        exportDialog.exportStatusText = "[OK] Saved to: " + resp.data.exported_path;
                     } else {
-                        exportDialog.exportStatusText = "✕ Export Error: " + (resp.error || "Unknown");
+                        exportDialog.exportStatusText = "[ERR] Export Error: " + (resp.error || "Unknown");
                     }
                 } catch(e) {
-                    exportDialog.exportStatusText = "✕ Export finished";
+                    exportDialog.exportStatusText = "[ERR] Export finished";
                 }
             }
         }
@@ -466,12 +527,12 @@ Rectangle {
                     if (resp.success && resp.data) {
                         root.loadPhoto(resp.data);
                         var fName = resp.data.split("/").pop();
-                        root.showToast("✓ Downloaded cloud RAW: " + fName, Theme.accentCyan);
+                        root.showToast("[OK] Downloaded cloud RAW: " + fName, Theme.accentCyan);
                     } else {
-                        root.showToast("✕ Cloud fetch failed: " + (resp.error || "Unknown"), Theme.accentMagenta);
+                        root.showToast("[ERR] Cloud fetch failed: " + (resp.error || "Unknown"), Theme.accentMagenta);
                     }
                 } catch(e) {
-                    root.showToast("✕ Cloud fetch parse error", Theme.accentMagenta);
+                    root.showToast("[ERR] Cloud fetch parse error", Theme.accentMagenta);
                 }
             }
         }
@@ -494,6 +555,14 @@ Rectangle {
     }
 
     // Keyboard Shortcuts (Lightroom & Studio Standards)
+    Shortcut {
+        sequence: "Ctrl+Z"
+        onActivated: root.undo()
+    }
+    Shortcut {
+        sequences: ["Ctrl+Shift+Z", "Ctrl+Y"]
+        onActivated: root.redo()
+    }
     Shortcut {
         sequence: "Ctrl+S"
         onActivated: root.saveSidecar()
@@ -539,6 +608,7 @@ Rectangle {
     }
 
     function applyPresetNamed(name) {
+        root.pushUndoState();
         if (name === "Fuji Classic Chrome") {
             root.contrastValue = 15.0;
             root.highlightsValue = -10.0;
@@ -587,7 +657,8 @@ Rectangle {
 
     function triggerSocial(platformCode) {
         if (!platformCode || platformCode.length === 0) return;
-        root.showToast("⚡ AI optimizing for " + platformCode + "...", Theme.accentCyan);
+        root.pushUndoState();
+        root.showToast("[AI] Optimizing for " + platformCode + "...", Theme.accentCyan);
         root.sendDaemonCommand({
             cmd: "ai_social",
             platform: String(platformCode)
@@ -632,6 +703,8 @@ Rectangle {
                 return p[p.length - 1];
             }
             onToggleMode: root.isProMode = !root.isProMode
+            onUndoClicked: root.undo()
+            onRedoClicked: root.redo()
             onOpenFileClicked: openFileProc.running = true
             onToggleSplit: {
                 root.isSplitView = !root.isSplitView;
@@ -682,7 +755,7 @@ Rectangle {
                             normW: viewport.normW
                             normH: viewport.normH
                             onZoomRequested: function(z) {
-                                if (z <= 1.0) viewport.resetZoomFit();
+                                if (z <= 0.05) viewport.resetZoomFit();
                                 else viewport.setZoomAbsolute(z);
                             }
                             onPanRequested: function(nx, ny) {
@@ -694,6 +767,16 @@ Rectangle {
                         HistogramView {
                             Layout.fillWidth: true
                             histData: root.activeHistogram
+                            showClippingHighlights: viewport.showHighlightMask
+                            showClippingShadows: viewport.showShadowMask
+                            onToggleHighlightMask: {
+                                viewport.showHighlightMask = !viewport.showHighlightMask;
+                                root.requestRender();
+                            }
+                            onToggleShadowMask: {
+                                viewport.showShadowMask = !viewport.showShadowMask;
+                                root.requestRender();
+                            }
                         }
 
                         // 3. EXIF CAMERA METADATA
@@ -1119,6 +1202,97 @@ Rectangle {
                                 onSliderMoved: function(v) { root.blacksValue = v; root.requestRender() }
                             }
 
+                            // Tone Curve (Parametric 4-Zone)
+                            Rectangle { Layout.fillWidth: true; height: 1; color: Theme.border }
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 6
+
+                                Text {
+                                    text: "TONE CURVE (PARAMETRIC)"
+                                    textFormat: Text.PlainText
+                                    font.pixelSize: 10
+                                    font.weight: Font.DemiBold
+                                    font.letterSpacing: 1
+                                    color: Theme.textDim
+                                    Layout.fillWidth: true
+                                }
+
+                                Rectangle {
+                                    implicitWidth: resetCurveText.implicitWidth + 10
+                                    implicitHeight: 18
+                                    radius: 4
+                                    color: resetCurveMouse.containsMouse ? Theme.bgCardHover : "transparent"
+                                    border.color: Theme.border
+                                    border.width: 1
+
+                                    Text {
+                                        id: resetCurveText
+                                        anchors.centerIn: parent
+                                        text: "RESET"
+                                        textFormat: Text.PlainText
+                                        font.pixelSize: 8
+                                        font.weight: Font.Bold
+                                        color: Theme.textDim
+                                    }
+
+                                    MouseArea {
+                                        id: resetCurveMouse
+                                        anchors.fill: parent
+                                        cursorShape: Qt.PointingHandCursor
+                                        hoverEnabled: true
+                                        onClicked: {
+                                            root.pushUndoState();
+                                            root.curveHighlights = 0.0;
+                                            root.curveLights = 0.0;
+                                            root.curveDarks = 0.0;
+                                            root.curveShadows = 0.0;
+                                            root.requestRender();
+                                        }
+                                    }
+                                }
+                            }
+
+                            SliderGroup {
+                                title: "Curve Highlights"
+                                from: -100.0
+                                to: 100.0
+                                value: root.curveHighlights
+                                defaultValue: 0.0
+                                accentColor: Theme.accent
+                                onSliderMoved: function(v) { root.curveHighlights = v; root.requestRender() }
+                            }
+
+                            SliderGroup {
+                                title: "Curve Lights (Upper Mids)"
+                                from: -100.0
+                                to: 100.0
+                                value: root.curveLights
+                                defaultValue: 0.0
+                                accentColor: Theme.accentCyan
+                                onSliderMoved: function(v) { root.curveLights = v; root.requestRender() }
+                            }
+
+                            SliderGroup {
+                                title: "Curve Darks (Lower Mids)"
+                                from: -100.0
+                                to: 100.0
+                                value: root.curveDarks
+                                defaultValue: 0.0
+                                accentColor: Theme.accentYellow
+                                onSliderMoved: function(v) { root.curveDarks = v; root.requestRender() }
+                            }
+
+                            SliderGroup {
+                                title: "Curve Shadows"
+                                from: -100.0
+                                to: 100.0
+                                value: root.curveShadows
+                                defaultValue: 0.0
+                                accentColor: Theme.accentOrange
+                                onSliderMoved: function(v) { root.curveShadows = v; root.requestRender() }
+                            }
+
                             // Presence
                             Rectangle { Layout.fillWidth: true; height: 1; color: Theme.border }
                             RowLayout {
@@ -1515,7 +1689,7 @@ Rectangle {
                 if (isRemote) {
                     root.isDownloadingRemote = true;
                     var fName = path.split("/").pop();
-                    root.showToast("☁ Fetching cloud RAW: " + fName + "...", Theme.accentCyan);
+                    root.showToast("[Cloud] Fetching cloud RAW: " + fName + "...", Theme.accentCyan);
                     fetchGdriveProc.command = [root.resolveEnginePath(), "gdrive", "fetch", path];
                     fetchGdriveProc.running = true;
                 } else {
@@ -1525,7 +1699,7 @@ Rectangle {
             onNavigateFolder: function(remotePath) {
                 root.currentGdrivePath = remotePath;
                 filmstrip.currentFolder = remotePath;
-                root.showToast("📁 Navigating: " + remotePath, Theme.accent);
+                root.showToast("[Folder] Navigating: " + remotePath, Theme.accent);
                 listProc.command = [root.resolveEnginePath(), "gdrive", "list", remotePath];
                 listProc.running = true;
             }
@@ -1538,7 +1712,7 @@ Rectangle {
                     root.currentGdrivePath = "Photos";
                 }
                 filmstrip.currentFolder = root.currentGdrivePath;
-                root.showToast("📁 Navigating: " + root.currentGdrivePath, Theme.accent);
+                root.showToast("[Folder] Navigating: " + root.currentGdrivePath, Theme.accent);
                 listProc.command = [root.resolveEnginePath(), "gdrive", "list", root.currentGdrivePath];
                 listProc.running = true;
             }

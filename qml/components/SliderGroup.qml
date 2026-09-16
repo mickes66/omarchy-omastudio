@@ -42,39 +42,82 @@ ColumnLayout {
         Text {
             text: root.title
             textFormat: Text.PlainText
-            color: Theme.textMain
+            color: root.effectiveValue !== root.defaultValue ? Theme.textMain : Theme.textMuted
             font.pixelSize: 12
-            font.weight: Font.Medium
+            font.weight: root.effectiveValue !== root.defaultValue ? Font.SemiBold : Font.Medium
             Layout.fillWidth: true
             elide: Text.ElideRight
-        }
-
-        Rectangle {
-            implicitWidth: valText.implicitWidth + 12
-            implicitHeight: 20
-            radius: 4
-            color: root.effectiveValue !== root.defaultValue ? Qt.rgba(root.accentColor.r, root.accentColor.g, root.accentColor.b, 0.2) : Theme.bgCard
-            border.color: root.effectiveValue !== root.defaultValue ? root.accentColor : Theme.border
-            border.width: 1
-
-            Text {
-                id: valText
-                anchors.centerIn: parent
-                text: (root.decimals === 0 ? Math.round(root.effectiveValue) : root.effectiveValue.toFixed(root.decimals)) + root.suffix
-                textFormat: Text.PlainText
-                color: root.effectiveValue !== root.defaultValue ? root.accentColor : Theme.textMuted
-                font.pixelSize: 11
-                font.family: Theme.monoFont
-                font.weight: Font.DemiBold
-            }
 
             MouseArea {
                 anchors.fill: parent
-                hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
                 onDoubleClicked: {
                     slider.value = root.defaultValue
                     root.sliderMoved(root.defaultValue)
+                }
+            }
+        }
+
+        RowLayout {
+            spacing: 4
+
+            // Dedicated Reset Button (visible whenever slider value diverges from default)
+            Rectangle {
+                visible: Math.abs(root.effectiveValue - root.defaultValue) > 0.001
+                implicitWidth: 18
+                implicitHeight: 18
+                radius: 4
+                color: sliderResetMouse.containsMouse ? root.accentColor : "transparent"
+                border.color: root.accentColor
+                border.width: 1
+
+                Text {
+                    anchors.centerIn: parent
+                    text: Theme.iconRotateLeft
+                    font.family: Theme.iconFont
+                    font.pixelSize: 9
+                    color: sliderResetMouse.containsMouse ? Theme.bgBase : root.accentColor
+                }
+
+                MouseArea {
+                    id: sliderResetMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        slider.value = root.defaultValue
+                        root.sliderMoved(root.defaultValue)
+                    }
+                }
+            }
+
+            Rectangle {
+                implicitWidth: valText.implicitWidth + 12
+                implicitHeight: 20
+                radius: 4
+                color: root.effectiveValue !== root.defaultValue ? Qt.rgba(root.accentColor.r, root.accentColor.g, root.accentColor.b, 0.2) : Theme.bgCard
+                border.color: root.effectiveValue !== root.defaultValue ? root.accentColor : Theme.border
+                border.width: 1
+
+                Text {
+                    id: valText
+                    anchors.centerIn: parent
+                    text: (root.decimals === 0 ? Math.round(root.effectiveValue) : root.effectiveValue.toFixed(root.decimals)) + root.suffix
+                    textFormat: Text.PlainText
+                    color: root.effectiveValue !== root.defaultValue ? root.accentColor : Theme.textMuted
+                    font.pixelSize: 11
+                    font.family: Theme.monoFont
+                    font.weight: Font.DemiBold
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onDoubleClicked: {
+                        slider.value = root.defaultValue
+                        root.sliderMoved(root.defaultValue)
+                    }
                 }
             }
         }

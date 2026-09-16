@@ -125,7 +125,7 @@ Rectangle {
 
                 Text {
                     anchors.centerIn: parent
-                    text: "ƒ/" + (root.metadata ? root.metadata.aperture.toFixed(1) : "--")
+                    text: "f/" + (root.metadata ? root.metadata.aperture.toFixed(1) : "--")
                     textFormat: Text.PlainText
                     font.pixelSize: 10
                     font.family: Theme.monoFont
