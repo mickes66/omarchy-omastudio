@@ -3,8 +3,8 @@ use omastudio_engine::pipeline::process_buffer;
 use omastudio_engine::raw::RawMetadata;
 use omastudio_engine::recipe::Recipe;
 use omastudio_engine::security::*;
-use std::fs;
-use std::os::unix::fs::PermissionsExt;
+use std::fs::{self, OpenOptions};
+use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -64,6 +64,95 @@ fn test_subprocess_deadline_and_reap() {
 
     assert!(res.is_err(), "Subprocess exceeding deadline must return TimedOut error");
     assert!(elapsed < Duration::from_millis(500), "Subprocess must be terminated promptly");
+}
+
+#[test]
+fn test_stream_to_file_byte_limit_enforcement() {
+    let temp_dir = PathBuf::from("/tmp/omaraw_test_stream_limit");
+    let _ = fs::remove_dir_all(&temp_dir);
+    ensure_secure_dir(&temp_dir).expect("Dir creation");
+
+    let staging_file_path = temp_dir.join("staging.tmp");
+    let mut staging_file = OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .read(true)
+        .mode(0o600)
+        .open(&staging_file_path)
+        .expect("Create staging file");
+
+    let mut cmd = secure_command("sh");
+    cmd.arg("-c").arg("yes '0123456789abcdef'");
+
+    let start = std::time::Instant::now();
+    let res = run_bounded_command_stream_to_file(
+        cmd,
+        &mut staging_file,
+        Duration::from_secs(5),
+        2048, // 2 KiB hard cap
+    );
+    let elapsed = start.elapsed();
+
+    assert!(res.is_err(), "Byte limit overrun must trigger an error");
+    assert!(elapsed < Duration::from_secs(2), "Process group must be reaped promptly on byte limit overrun");
+
+    let _ = fs::remove_dir_all(&temp_dir);
+}
+
+#[test]
+fn test_verify_secure_open_file() {
+    let temp_dir = PathBuf::from("/tmp/omaraw_test_open_file_sec");
+    let _ = fs::remove_dir_all(&temp_dir);
+    ensure_secure_dir(&temp_dir).expect("Dir creation");
+
+    let valid_path = temp_dir.join("valid_0600.dat");
+    let mut valid_file = OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .read(true)
+        .mode(0o600)
+        .open(&valid_path)
+        .expect("Create 0600 file");
+
+    std::io::Write::write_all(&mut valid_file, b"test_payload_secure").expect("Write");
+    valid_file.sync_all().expect("Sync");
+
+    let size = verify_secure_open_file(&valid_file, 1024).expect("Mode 0600 owned file must pass verification");
+    assert_eq!(size, 19);
+
+    // Test size cap exceeded
+    let cap_err = verify_secure_open_file(&valid_file, 10);
+    assert!(cap_err.is_err(), "File exceeding byte limit must fail verification");
+
+    let _ = fs::remove_dir_all(&temp_dir);
+}
+
+#[test]
+fn test_gdrive_corrupted_cache_purging() {
+    let cache_dir = omastudio_engine::gdrive::default_gdrive_cache_dir();
+    let _ = ensure_secure_dir(&cache_dir);
+
+    let corrupt_file = cache_dir.join("corrupt_test_image.nef");
+    // Write 2000 bytes of non-RAW garbage to simulate partial download
+    let garbage = vec![0x41u8; 2000];
+    let mut f = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .mode(0o600)
+        .open(&corrupt_file)
+        .expect("Create corrupt cache file");
+    std::io::Write::write_all(&mut f, &garbage).expect("Write garbage");
+    f.sync_all().expect("Sync");
+    drop(f);
+
+    assert!(corrupt_file.exists());
+
+    // Calling fetch_remote_raw should detect that LibRaw cannot open this file,
+    // purge it, and proceed to download (which will fail due to rclone gdrive remote not configured or nonexistent file, but crucial point is corrupt cache file is deleted)
+    let res = omastudio_engine::gdrive::fetch_remote_raw("corrupt_test_image.nef");
+    assert!(res.is_err(), "Fetching nonexistent remote file should fail");
+    assert!(!corrupt_file.exists(), "Corrupted/partial cache file must be purged");
 }
 
 #[test]

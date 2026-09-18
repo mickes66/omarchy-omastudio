@@ -268,3 +268,178 @@ pub fn atomic_write_secure(target: &Path, data: &[u8]) -> io::Result<()> {
     fs::rename(&temp_path, target)?;
     Ok(())
 }
+
+/// Streams child process stdout directly to a file descriptor, enforcing a hard byte limit and deadline.
+/// If max_bytes is exceeded or timeout occurs, the process group is reaped and an error is returned.
+pub fn run_bounded_command_stream_to_file(
+    mut cmd: Command,
+    target_file: &mut fs::File,
+    timeout: Duration,
+    max_bytes: usize,
+) -> io::Result<usize> {
+    use std::os::unix::io::AsRawFd;
+
+    cmd.stdout(std::process::Stdio::piped());
+    cmd.stderr(std::process::Stdio::piped());
+
+    let mut child = cmd.spawn()?;
+    let guard = ProcessGroupGuard::new(&mut child);
+
+    let deadline = Instant::now() + timeout;
+
+    let stdout_fd = guard.child.stdout.as_ref().map(|p| p.as_raw_fd());
+    let stderr_fd = guard.child.stderr.as_ref().map(|p| p.as_raw_fd());
+
+    // Set non-blocking on pipes
+    for &fd_opt in &[stdout_fd, stderr_fd] {
+        if let Some(fd) = fd_opt {
+            unsafe {
+                let flags = libc::fcntl(fd, libc::F_GETFL);
+                if flags >= 0 {
+                    libc::fcntl(fd, libc::F_SETFL, flags | libc::O_NONBLOCK);
+                }
+            }
+        }
+    }
+
+    let mut total_written = 0usize;
+    let mut chunk = [0u8; 8192];
+    let mut err_chunk = [0u8; 1024];
+    let mut stderr_buf = Vec::new();
+    let mut child_exited = false;
+    let mut exit_code = -1;
+    let mut stdout_closed = false;
+
+    while Instant::now() < deadline {
+        if !child_exited {
+            if let Ok(Some(status)) = guard.child.try_wait() {
+                child_exited = true;
+                exit_code = status.code().unwrap_or(-1);
+            }
+        }
+
+        // Drain stdout into target_file
+        if let Some(ref mut pipe) = guard.child.stdout {
+            if !stdout_closed {
+                loop {
+                    match pipe.read(&mut chunk) {
+                        Ok(0) => {
+                            stdout_closed = true;
+                            break;
+                        }
+                        Ok(n) => {
+                            if total_written + n > max_bytes {
+                                return Err(io::Error::new(
+                                    io::ErrorKind::OutOfMemory,
+                                    format!("Output exceeded maximum allowed size of {} bytes", max_bytes),
+                                ));
+                            }
+                            target_file.write_all(&chunk[..n])?;
+                            total_written += n;
+                        }
+                        Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => break,
+                        Err(e) => return Err(e),
+                    }
+                }
+            }
+        }
+
+        // Drain stderr
+        if let Some(ref mut pipe) = guard.child.stderr {
+            loop {
+                match pipe.read(&mut err_chunk) {
+                    Ok(0) => break,
+                    Ok(n) => {
+                        if stderr_buf.len() + n <= MAX_COMMAND_OUTPUT_BYTES {
+                            stderr_buf.extend_from_slice(&err_chunk[..n]);
+                        }
+                    }
+                    Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => break,
+                    Err(e) => return Err(e),
+                }
+            }
+        }
+
+        if child_exited && stdout_closed {
+            break;
+        }
+
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        let sleep_step = Duration::from_millis(10).min(remaining);
+        if sleep_step.is_zero() {
+            break;
+        }
+        thread::sleep(sleep_step);
+    }
+
+    if !child_exited {
+        return Err(io::Error::new(
+            io::ErrorKind::TimedOut,
+            "Command exceeded monotonic deadline",
+        ));
+    }
+
+    if exit_code != 0 {
+        return Err(io::Error::other(format!(
+            "Command failed with exit code {}: {}",
+            exit_code,
+            String::from_utf8_lossy(&stderr_buf).trim()
+        )));
+    }
+
+    target_file.sync_all()?;
+    guard.defuse();
+    Ok(total_written)
+}
+
+/// Verifies an open file descriptor is a regular file, owned by current user, mode 0600, and within size limit
+pub fn verify_secure_open_file(file: &fs::File, max_bytes: usize) -> io::Result<u64> {
+    use std::os::unix::io::AsRawFd;
+
+    let mut stat: libc::stat = unsafe { std::mem::zeroed() };
+    if unsafe { libc::fstat(file.as_raw_fd(), &mut stat) } != 0 {
+        return Err(io::Error::last_os_error());
+    }
+
+    // Must be regular file (S_IFREG)
+    if (stat.st_mode & libc::S_IFMT) != libc::S_IFREG {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Target file is not a regular file",
+        ));
+    }
+
+    // Must be owned by current user
+    let current_uid = unsafe { libc::getuid() };
+    if stat.st_uid != current_uid {
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "Target file is not owned by current user",
+        ));
+    }
+
+    // Must be private (no group or others permissions: st_mode & 0o077 == 0)
+    if (stat.st_mode & 0o077) != 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "Target file permissions are not private (mode 0600 required)",
+        ));
+    }
+
+    let size = stat.st_size;
+    if size <= 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Target file is empty",
+        ));
+    }
+    if (size as u64) > (max_bytes as u64) {
+        return Err(io::Error::new(
+            io::ErrorKind::OutOfMemory,
+            format!("File size {} exceeds maximum allowed limit {}", size, max_bytes),
+        ));
+    }
+
+    Ok(size as u64)
+}
+
