@@ -17,6 +17,16 @@
 
 ---
 
+> ### 🔀 This is a fork
+> [mickes66/omarchy-omastudio](https://github.com/mickes66/omarchy-omastudio), branch [`local-fixes`](https://github.com/mickes66/omarchy-omastudio/tree/local-fixes), diverging from upstream [ozdil/omarchy-omastudio](https://github.com/ozdil/omarchy-omastudio):
+>
+> - **JPEG and TIFF import**, alongside every RAW format below — same non-destructive pipeline, color grading, AI tools, and multi-format export, now usable on ordinary photos too. EXIF (camera, lens, ISO, shutter, aperture, focal length, timestamp) is read for both formats when present.
+> - A portability fix so the engine actually finds itself on any machine, not just the original author's (see upstream [issue #1](https://github.com/ozdil/omarchy-omastudio/issues/1) / [PR #2](https://github.com/ozdil/omarchy-omastudio/pull/2), submitted upstream and awaiting review).
+>
+> The JPEG/TIFF addition is fork-only by design — upstream OmaStudio is intentionally a RAW-only editor, so it isn't proposed there. Full diff: [`master...local-fixes`](https://github.com/mickes66/omarchy-omastudio/compare/master...local-fixes).
+
+---
+
 ## Architecture & Principles
 
 OmaStudio employs a high-performance hybrid architecture designed specifically for the modern Linux desktop: The graphical user interface runs at 60+ FPS powered by GPU-accelerated **Quickshell (Qt 6 / QML)**, while the image processing and RAW decoding pipeline is driven by a multi-threaded **Rust (Rayon + LibRaw FFI)** engine.
