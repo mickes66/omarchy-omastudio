@@ -13,7 +13,7 @@ Rectangle {
     property var photoList: []
     property string activePhotoPath: ""
     property bool isGdriveMode: false
-    property string currentFolder: "~/Pictures"
+    property string currentFolder: "Recent"
     property bool isDownloadingRemote: false
 
     signal selectPhoto(string path, bool isRemote)

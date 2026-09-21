@@ -388,6 +388,9 @@ Rectangle {
                     root.activeMetadata = data.metadata;
                     root.activeScene = data.scene;
                     root.applyRecipeObject(data.recipe);
+                    // Keep "Recent" current so a photo opened from anywhere shows
+                    // up in the filmstrip immediately, no manual refresh needed.
+                    if (!filmstrip.isGdriveMode) root.scanRecent();
                 }
             } else if (act === "adjust") {
                 if (data) {
@@ -619,6 +622,14 @@ Rectangle {
 
     function scanLocalFolder(dir) {
         listProc.command = [root.resolveEnginePath(), "scan", dir];
+        listProc.running = true;
+    }
+
+    /// "Local Photos" shows recently opened photos (any folder, engine-tracked
+    /// via the on-disk catalog) rather than the fixed-folder scan scanLocalFolder
+    /// still offers for anything that wants to browse a specific directory.
+    function scanRecent() {
+        listProc.command = [root.resolveEnginePath(), "recent"];
         listProc.running = true;
     }
 
@@ -1744,9 +1755,9 @@ Rectangle {
                     listProc.command = [root.resolveEnginePath(), "gdrive", "list", root.currentGdrivePath];
                     listProc.running = true;
                 } else {
-                    filmstrip.currentFolder = "~/Pictures";
+                    filmstrip.currentFolder = "Recent";
                     root.hiddenPaths = [];
-                    root.scanLocalFolder("~/Pictures");
+                    root.scanRecent();
                 }
             }
             onRefreshRequested: {
@@ -1755,7 +1766,7 @@ Rectangle {
                     listProc.command = [root.resolveEnginePath(), "gdrive", "list", root.currentGdrivePath];
                     listProc.running = true;
                 } else {
-                    root.scanLocalFolder("~/Pictures");
+                    root.scanRecent();
                 }
             }
         }
@@ -1824,7 +1835,7 @@ Rectangle {
     }
 
     Component.onCompleted: {
-        scanLocalFolder("~/Pictures");
+        scanRecent();
         if (root.activePhotoPath !== "") loadPhoto(root.activePhotoPath);
     }
 

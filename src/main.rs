@@ -335,6 +335,26 @@ fn main() {
                 Err(e) => print_json::<()>(&ResponseWrapper::err(e)),
             }
         }
+        "recent" => {
+            let cat = Catalog::load();
+            let mut entries: Vec<&CatalogItem> = cat.items.values().collect();
+            entries.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+            let items: Vec<FolderScanItem> = entries
+                .into_iter()
+                .filter(|it| Path::new(&it.path).is_file())
+                .map(|it| FolderScanItem {
+                    name: Path::new(&it.path)
+                        .file_name()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or(&it.id)
+                        .to_string(),
+                    path: it.path.clone(),
+                    thumbnail: it.thumbnail_path.clone(),
+                    is_remote: it.remote_path.is_some(),
+                })
+                .collect();
+            print_json(&ResponseWrapper::ok(items));
+        }
         "catalog" => {
             let cat = Catalog::load();
             print_json(&ResponseWrapper::ok(cat));
@@ -725,6 +745,32 @@ fn run_daemon() {
 
                                 let sidecar = Recipe::load_sidecar(p).unwrap_or_default();
                                 let scene = ai_classify_scene(&u8_vec, prev.width, prev.height, prev.channels, &meta);
+
+                                // Record every interactively opened photo in the catalog
+                                // (path, thumbnail, metadata, timestamp) so the UI can offer
+                                // a "recently opened" view independent of any fixed folder.
+                                let file_stem = Path::new(p)
+                                    .file_stem()
+                                    .and_then(|s| s.to_str())
+                                    .unwrap_or("photo");
+                                let mut catalog = Catalog::load();
+                                let now = SystemTime::now()
+                                    .duration_since(UNIX_EPOCH)
+                                    .unwrap_or_default()
+                                    .as_secs();
+                                catalog.upsert(CatalogItem {
+                                    id: file_stem.to_string(),
+                                    path: p.clone(),
+                                    remote_path: None,
+                                    thumbnail_path: thumb_path.to_string_lossy().to_string(),
+                                    metadata: meta.clone(),
+                                    rating: 0,
+                                    color_label: String::new(),
+                                    flag: "unflagged".to_string(),
+                                    recipe: sidecar.clone(),
+                                    updated_at: now,
+                                });
+                                let _ = catalog.save();
 
                                 print_json(&ResponseWrapper::ok_action("load", InspectResult {
                                     path: p.clone(),
