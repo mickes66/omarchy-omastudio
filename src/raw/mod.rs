@@ -1,4 +1,5 @@
 pub mod ffi;
+pub mod standard;
 
 use ffi::*;
 use serde::{Deserialize, Serialize};
@@ -24,6 +25,10 @@ pub struct RawMetadata {
 
 pub struct ProcessedBuffer {
     ptr: *mut u8,
+    /// true when `ptr` came from a Rust allocation (e.g. a decoded JPEG/TIFF buffer)
+    /// and must be freed with `Vec::from_raw_parts` instead of the LibRaw C shim's
+    /// `omaraw_free_image`.
+    owned: bool,
     pub width: u32,
     pub height: u32,
     pub channels: u32,
@@ -65,14 +70,48 @@ impl ProcessedBuffer {
     pub fn to_vec_u16(&self) -> Vec<u16> {
         self.as_slice_u16().to_vec()
     }
+
+    /// Wraps a Rust-decoded pixel buffer (e.g. from the `image` crate) in the same
+    /// type the LibRaw path produces, so pipeline/export/AI code downstream never
+    /// needs to know which decoder a photo came from.
+    pub(crate) fn from_owned(
+        mut data: Vec<u8>,
+        width: u32,
+        height: u32,
+        channels: u32,
+        bits_per_sample: u32,
+    ) -> Self {
+        data.shrink_to_fit();
+        let data_size = data.len();
+        let ptr = data.as_mut_ptr();
+        // Ownership transfers to the raw pointer; reclaimed in Drop via Vec::from_raw_parts.
+        std::mem::forget(data);
+        Self {
+            ptr,
+            owned: true,
+            width,
+            height,
+            channels,
+            bits_per_sample,
+            data_size,
+        }
+    }
 }
 
 impl Drop for ProcessedBuffer {
     fn drop(&mut self) {
         if !self.ptr.is_null() {
-            // SAFETY: ptr was allocated by malloc in C shim and is freed here
-            unsafe {
-                omaraw_free_image(self.ptr);
+            if self.owned {
+                // SAFETY: ptr/data_size came from a Vec<u8> forgotten in from_owned after
+                // shrink_to_fit, so len == capacity and the original allocator/layout match.
+                unsafe {
+                    drop(Vec::from_raw_parts(self.ptr, self.data_size, self.data_size));
+                }
+            } else {
+                // SAFETY: ptr was allocated by malloc in C shim and is freed here
+                unsafe {
+                    omaraw_free_image(self.ptr);
+                }
             }
             self.ptr = std::ptr::null_mut();
         }
@@ -234,6 +273,7 @@ impl RawImage {
 
         Ok(ProcessedBuffer {
             ptr,
+            owned: false,
             width: out_w.max(0) as u32,
             height: out_h.max(0) as u32,
             channels: out_colors.max(0) as u32,
@@ -274,5 +314,76 @@ impl Drop for RawImage {
 impl RawImage {
     pub fn path(&self) -> &Path {
         &self.path
+    }
+}
+
+/// Any photo OmaStudio can open: a camera RAW file decoded by LibRaw, or a
+/// plain JPEG/TIFF decoded by the `image` crate. Both variants expose the same
+/// method surface as the old `RawImage`-only API, so callers that only ever
+/// used `RawImage::open(...)` can switch to `PhotoSource::open(...)` and keep
+/// every other line unchanged.
+pub enum PhotoSource {
+    Raw(RawImage),
+    Standard(PathBuf),
+}
+
+impl PhotoSource {
+    pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, String> {
+        let path_ref = path.as_ref();
+        let ext = path_ref
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_lowercase();
+
+        if standard::is_standard_ext(&ext) {
+            crate::security::verify_safe_file(path_ref)
+                .map_err(|e| format!("Security check failed for {}: {}", path_ref.display(), e))?;
+            Ok(PhotoSource::Standard(path_ref.to_path_buf()))
+        } else {
+            RawImage::open(path_ref).map(PhotoSource::Raw)
+        }
+    }
+
+    pub fn get_metadata(&self) -> Result<RawMetadata, String> {
+        match self {
+            PhotoSource::Raw(r) => r.get_metadata(),
+            PhotoSource::Standard(p) => standard::read_metadata(p),
+        }
+    }
+
+    pub fn extract_thumbnail<P: AsRef<Path>>(&self, dest_path: P) -> Result<(), String> {
+        match self {
+            PhotoSource::Raw(r) => r.extract_thumbnail(dest_path),
+            PhotoSource::Standard(p) => standard::write_thumbnail(p, dest_path.as_ref()),
+        }
+    }
+
+    pub fn process_preview(&self, half_size: bool) -> Result<ProcessedBuffer, String> {
+        match self {
+            PhotoSource::Raw(r) => r.process_preview(half_size),
+            PhotoSource::Standard(p) => standard::process_preview(p, half_size),
+        }
+    }
+
+    pub fn process_preview_16(&self, half_size: bool) -> Result<ProcessedBuffer, String> {
+        match self {
+            PhotoSource::Raw(r) => r.process_preview_16(half_size),
+            PhotoSource::Standard(p) => standard::process_preview_16(p, half_size),
+        }
+    }
+
+    pub fn process_full(&self, quality: i32) -> Result<ProcessedBuffer, String> {
+        match self {
+            PhotoSource::Raw(r) => r.process_full(quality),
+            PhotoSource::Standard(p) => standard::process_full(p, quality),
+        }
+    }
+
+    pub fn process_full_16(&self, quality: i32) -> Result<ProcessedBuffer, String> {
+        match self {
+            PhotoSource::Raw(r) => r.process_full_16(quality),
+            PhotoSource::Standard(p) => standard::process_full_16(p, quality),
+        }
     }
 }

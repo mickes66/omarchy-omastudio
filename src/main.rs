@@ -16,7 +16,7 @@ use pipeline::{
     process_buffer_16_to_8, process_buffer_16_to_8_ex, process_split_comparison_16_to_8,
     process_split_comparison_16_to_8_ex,
 };
-use raw::RawImage;
+use raw::PhotoSource;
 use recipe::{Catalog, CatalogItem, Recipe};
 use serde::{Deserialize, Serialize};
 use std::env;
@@ -141,11 +141,12 @@ fn scan_directory(dir_path: &str) -> Result<Vec<FolderScanItem>, String> {
             if path.is_file() {
                 if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
                     let ext_lower = ext.to_lowercase();
-                    if ["nef", "nrw", "raf", "cr2", "cr3", "arw", "dng", "rwl", "orf", "rw2"].contains(&ext_lower.as_str()) {
+                    let is_raw_ext = ["nef", "nrw", "raf", "cr2", "cr3", "arw", "dng", "rwl", "orf", "rw2"].contains(&ext_lower.as_str());
+                    if is_raw_ext || raw::standard::is_standard_ext(&ext_lower) {
                         let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("thumb");
                         let thumb_path = thumb_dir.join(format!("{}.jpg", stem));
                         if !thumb_path.exists() {
-                            if let Ok(raw) = RawImage::open(&path) {
+                            if let Ok(raw) = PhotoSource::open(&path) {
                                 let _ = raw.extract_thumbnail(&thumb_path);
                             }
                         }
@@ -474,7 +475,7 @@ fn main() {
 }
 
 fn inspect_file(raw_path: &str) -> Result<InspectResult, String> {
-    let raw = RawImage::open(raw_path)?;
+    let raw = PhotoSource::open(raw_path)?;
     let meta = raw.get_metadata()?;
 
     let home = env::var("HOME").unwrap_or_else(|_| ".".to_string());
@@ -529,7 +530,7 @@ fn inspect_file(raw_path: &str) -> Result<InspectResult, String> {
 }
 
 fn render_file(raw_path: &str, recipe: &Recipe, split: f32, out_path: &str) -> Result<RenderResult, String> {
-    let raw = RawImage::open(raw_path)?;
+    let raw = PhotoSource::open(raw_path)?;
     let preview = raw.process_preview_16(true)?;
 
     let (final_buf, hist) = if split > 0.001 {
@@ -581,7 +582,7 @@ fn render_file(raw_path: &str, recipe: &Recipe, split: f32, out_path: &str) -> R
 }
 
 fn run_ai_auto(raw_path: &str) -> Result<InspectResult, String> {
-    let raw = RawImage::open(raw_path)?;
+    let raw = PhotoSource::open(raw_path)?;
     let meta = raw.get_metadata()?;
     let preview = raw.process_preview(true)?;
 
@@ -603,7 +604,7 @@ fn run_ai_auto(raw_path: &str) -> Result<InspectResult, String> {
 }
 
 fn run_ai_social(raw_path: &str, platform: &str) -> Result<ai::SocialOptimizationResult, String> {
-    let raw = RawImage::open(raw_path)?;
+    let raw = PhotoSource::open(raw_path)?;
     let preview = raw.process_preview(true)?;
     let sidecar = Recipe::load_sidecar(raw_path).unwrap_or_default();
     let result = ai_optimize_for_social(
@@ -682,7 +683,7 @@ fn run_daemon() {
                     }
                 };
 
-                match RawImage::open(p) {
+                match PhotoSource::open(p) {
                     Ok(raw) => {
                         let meta = raw.get_metadata().unwrap_or(raw::RawMetadata {
                             width: 0,

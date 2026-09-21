@@ -1,6 +1,6 @@
 use crate::gdrive::upload_export_to_gdrive;
 use crate::pipeline::process_buffer_16_to_16;
-use crate::raw::RawImage;
+use crate::raw::PhotoSource;
 use crate::recipe::Recipe;
 use crate::security::{run_bounded_command, secure_command};
 use image::{DynamicImage, ImageBuffer, Rgb};
@@ -48,7 +48,7 @@ pub fn export_photo<P: AsRef<Path>>(
     recipe: &Recipe,
     options: &ExportOptions,
 ) -> Result<PathBuf, String> {
-    let raw = RawImage::open(&raw_path)
+    let raw = PhotoSource::open(&raw_path)
         .map_err(|e| format!("Could not open RAW for export: {}", e))?;
 
     // Demosaic at high quality with full 16-bit depth (48-bit RGB)

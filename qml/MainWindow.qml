@@ -482,7 +482,7 @@ Rectangle {
     // Process: File picker
     Process {
         id: openFileProc
-        command: ["zenity", "--file-selection", "--title=Open RAW Photo", "--file-filter=RAW Photos | *.RAF *.raf *.NEF *.nef *.CR2 *.cr2 *.CR3 *.cr3 *.ARW *.arw *.DNG *.dng"]
+        command: ["zenity", "--file-selection", "--title=Open Photo", "--file-filter=All Supported | *.RAF *.raf *.NEF *.nef *.CR2 *.cr2 *.CR3 *.cr3 *.ARW *.arw *.DNG *.dng *.jpg *.jpeg *.JPG *.JPEG *.tif *.tiff *.TIF *.TIFF", "--file-filter=RAW Photos | *.RAF *.raf *.NEF *.nef *.CR2 *.cr2 *.CR3 *.cr3 *.ARW *.arw *.DNG *.dng", "--file-filter=JPEG/TIFF | *.jpg *.jpeg *.JPG *.JPEG *.tif *.tiff *.TIF *.TIFF"]
         stdout: StdioCollector {
             waitForEnd: true
             onStreamFinished: {

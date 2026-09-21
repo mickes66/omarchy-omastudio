@@ -91,8 +91,8 @@ pub fn list_gdrive_folder(subfolder: &str) -> Result<Vec<RemoteItem>, String> {
             format!("{}/{}", clean_sub, entry.path)
         };
 
-        // Filter for RAW formats or directories
-        let is_raw = entry.is_dir || {
+        // Filter for RAW/standard photo formats or directories
+        let is_photo = entry.is_dir || {
             let lower = entry.name.to_lowercase();
             lower.ends_with(".nef")
                 || lower.ends_with(".nrw")
@@ -104,9 +104,13 @@ pub fn list_gdrive_folder(subfolder: &str) -> Result<Vec<RemoteItem>, String> {
                 || lower.ends_with(".rwl")
                 || lower.ends_with(".orf")
                 || lower.ends_with(".rw2")
+                || lower.ends_with(".jpg")
+                || lower.ends_with(".jpeg")
+                || lower.ends_with(".tif")
+                || lower.ends_with(".tiff")
         };
 
-        if is_raw {
+        if is_photo {
             let thumb = if !entry.is_dir {
                 let stem = Path::new(&entry.name).file_stem().and_then(|s| s.to_str()).unwrap_or("thumb");
                 let thumb_candidate = thumb_dir.join(format!("{}.jpg", stem));
