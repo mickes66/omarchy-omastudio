@@ -1,6 +1,6 @@
-use std::fs::{self, OpenOptions};
+use std::fs::{self};
 use std::io::{self, Read, Write};
-use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+use std::os::unix::io::RawFd;
 use std::path::Path;
 use std::process::{Child, Command};
 use std::thread;
@@ -203,23 +203,233 @@ pub fn run_bounded_command(
     Ok((exit_code, stdout_buf, stderr_buf))
 }
 
-/// Ensures directory exists with strict Mode 0700 permissions
-pub fn ensure_secure_dir(path: &Path) -> io::Result<()> {
-    if !path.exists() {
-        fs::create_dir_all(path)?;
-        let mut perms = fs::metadata(path)?.permissions();
-        perms.set_mode(0o700);
-        fs::set_permissions(path, perms)?;
-    } else {
-        // If directory already exists, enforce 0700 if owned by user, but tolerate system dirs (e.g. /tmp, /dev/shm)
-        let mut perms = fs::metadata(path)?.permissions();
-        perms.set_mode(0o700);
-        if let Err(e) = fs::set_permissions(path, perms) {
-            if e.raw_os_error() != Some(libc::EPERM) && e.raw_os_error() != Some(libc::EACCES) {
-                return Err(e);
+/// Represents an open directory file descriptor bound to a verified secure directory hierarchy
+pub struct SecureDir {
+    fd: RawFd,
+}
+
+impl Drop for SecureDir {
+    fn drop(&mut self) {
+        if self.fd >= 0 {
+            unsafe {
+                libc::close(self.fd);
             }
         }
     }
+}
+
+impl std::os::unix::io::AsRawFd for SecureDir {
+    fn as_raw_fd(&self) -> RawFd {
+        self.fd
+    }
+}
+
+impl SecureDir {
+    /// Opens or creates each component of a directory hierarchy without following symlinks (O_NOFOLLOW).
+    /// Retains and returns an open directory descriptor bound to the final directory.
+    pub fn open_or_create_hierarchy(path: &Path) -> io::Result<Self> {
+        use std::ffi::CString;
+        use std::os::unix::ffi::OsStrExt;
+
+        let abs_path = if path.is_absolute() {
+            path.to_path_buf()
+        } else {
+            std::env::current_dir()?.join(path)
+        };
+
+        // Open root directory descriptor
+        let mut cur_fd = unsafe {
+            libc::open(
+                c"/".as_ptr(),
+                libc::O_RDONLY | libc::O_DIRECTORY | libc::O_CLOEXEC,
+            )
+        };
+        if cur_fd < 0 {
+            return Err(io::Error::last_os_error());
+        }
+
+        let current_uid = unsafe { libc::getuid() };
+
+        for comp in abs_path.components() {
+            match comp {
+                std::path::Component::RootDir | std::path::Component::Prefix(_) => continue,
+                std::path::Component::CurDir => continue,
+                std::path::Component::ParentDir => {
+                    unsafe { libc::close(cur_fd); }
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        "Parent directory traversal (..) is not permitted in secure paths",
+                    ));
+                }
+                std::path::Component::Normal(c_name) => {
+                    let c_str = CString::new(c_name.as_bytes()).map_err(|e| {
+                        unsafe { libc::close(cur_fd); }
+                        io::Error::new(io::ErrorKind::InvalidInput, e)
+                    })?;
+
+                    // Attempt to open directory without following symlinks
+                    let mut next_fd = unsafe {
+                        libc::openat(
+                            cur_fd,
+                            c_str.as_ptr(),
+                            libc::O_RDONLY | libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+                        )
+                    };
+
+                    if next_fd < 0 {
+                        let err = io::Error::last_os_error();
+                        if err.raw_os_error() == Some(libc::ENOENT) {
+                            // Directory does not exist: create with mode 0700
+                            let ret = unsafe { libc::mkdirat(cur_fd, c_str.as_ptr(), 0o700) };
+                            if ret != 0 {
+                                let mkdir_err = io::Error::last_os_error();
+                                if mkdir_err.raw_os_error() != Some(libc::EEXIST) {
+                                    unsafe { libc::close(cur_fd); }
+                                    return Err(mkdir_err);
+                                }
+                            }
+
+                            next_fd = unsafe {
+                                libc::openat(
+                                    cur_fd,
+                                    c_str.as_ptr(),
+                                    libc::O_RDONLY | libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+                                )
+                            };
+                        }
+                    }
+
+                    if next_fd < 0 {
+                        let err = io::Error::last_os_error();
+                        unsafe { libc::close(cur_fd); }
+                        return Err(err);
+                    }
+
+                    // Verify opened descriptor with fstat
+                    let mut stat: libc::stat = unsafe { std::mem::zeroed() };
+                    if unsafe { libc::fstat(next_fd, &mut stat) } != 0 {
+                        let err = io::Error::last_os_error();
+                        unsafe {
+                            libc::close(next_fd);
+                            libc::close(cur_fd);
+                        }
+                        return Err(err);
+                    }
+
+                    // Must be a directory (S_IFDIR) and definitely not a symlink
+                    if (stat.st_mode & libc::S_IFMT) != libc::S_IFDIR {
+                        unsafe {
+                            libc::close(next_fd);
+                            libc::close(cur_fd);
+                        }
+                        return Err(io::Error::new(
+                            io::ErrorKind::PermissionDenied,
+                            "Path component is not a directory or is a symbolic link",
+                        ));
+                    }
+
+                    // If owned by current user, enforce strict 0700 permissions descriptor-bound
+                    if stat.st_uid == current_uid && (stat.st_mode & 0o777) != 0o700 {
+                        let _ = unsafe { libc::fchmod(next_fd, 0o700) };
+                    }
+
+                    unsafe { libc::close(cur_fd); }
+                    cur_fd = next_fd;
+                }
+            }
+        }
+
+        Ok(Self { fd: cur_fd })
+    }
+
+    /// Creates an exclusive, no-follow temporary staging file with mode 0600 relative to this directory
+    pub fn open_staging_file(&self, prefix: &str, suffix: &str) -> io::Result<(fs::File, std::ffi::CString)> {
+        use std::ffi::CString;
+        use std::os::unix::io::FromRawFd;
+
+        let temp_name = format!(
+            "{}_{}_{}_{}",
+            prefix,
+            std::process::id(),
+            Instant::now().elapsed().as_nanos(),
+            suffix
+        );
+        let c_name = CString::new(temp_name.as_bytes())
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
+
+        let fd = unsafe {
+            libc::openat(
+                self.fd,
+                c_name.as_ptr(),
+                libc::O_RDWR | libc::O_CREAT | libc::O_EXCL | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+                0o600,
+            )
+        };
+
+        if fd < 0 {
+            return Err(io::Error::last_os_error());
+        }
+
+        let file = unsafe { fs::File::from_raw_fd(fd) };
+        Ok((file, c_name))
+    }
+
+    /// Opens an existing file read-only relative to this directory without following symlinks
+    pub fn open_existing_file_ro(&self, c_name: &std::ffi::CStr) -> io::Result<fs::File> {
+        use std::os::unix::io::FromRawFd;
+
+        let fd = unsafe {
+            libc::openat(
+                self.fd,
+                c_name.as_ptr(),
+                libc::O_RDONLY | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+            )
+        };
+        if fd < 0 {
+            return Err(io::Error::last_os_error());
+        }
+        Ok(unsafe { fs::File::from_raw_fd(fd) })
+    }
+
+    /// Unlinks a file relative to this directory
+    pub fn unlink_file(&self, c_name: &std::ffi::CStr) -> io::Result<()> {
+        let ret = unsafe { libc::unlinkat(self.fd, c_name.as_ptr(), 0) };
+        if ret != 0 {
+            return Err(io::Error::last_os_error());
+        }
+        Ok(())
+    }
+
+    /// Atomically renames a file relative to this directory
+    pub fn rename_file(&self, from_name: &std::ffi::CStr, to_name: &std::ffi::CStr) -> io::Result<()> {
+        let ret = unsafe {
+            libc::renameat(self.fd, from_name.as_ptr(), self.fd, to_name.as_ptr())
+        };
+        if ret != 0 {
+            return Err(io::Error::last_os_error());
+        }
+        Ok(())
+    }
+}
+
+/// RAII Guard ensuring staging files created relative to a SecureDir are unlinked on error or timeout
+pub struct SecureDirCleanupGuard<'a> {
+    pub secure_dir: &'a SecureDir,
+    pub filename: std::ffi::CString,
+    pub active: bool,
+}
+
+impl<'a> Drop for SecureDirCleanupGuard<'a> {
+    fn drop(&mut self) {
+        if self.active {
+            let _ = self.secure_dir.unlink_file(&self.filename);
+        }
+    }
+}
+
+/// Ensures directory exists with strict Mode 0700 permissions without following symbolic links
+pub fn ensure_secure_dir(path: &Path) -> io::Result<()> {
+    let _dir = SecureDir::open_or_create_hierarchy(path)?;
     Ok(())
 }
 
@@ -241,31 +451,33 @@ pub fn verify_safe_file(path: &Path) -> io::Result<()> {
     Ok(())
 }
 
-/// Atomically writes sensitive data to a file with Mode 0600 permissions
+/// Atomically writes sensitive data to a file with Mode 0600 permissions using descriptor-bound staging
 pub fn atomic_write_secure(target: &Path, data: &[u8]) -> io::Result<()> {
+    use std::ffi::CString;
+
     let parent = target.parent().unwrap_or_else(|| Path::new("."));
-    ensure_secure_dir(parent)?;
+    let secure_dir = SecureDir::open_or_create_hierarchy(parent)?;
 
-    let temp_name = format!(".tmp_{}_{}", std::process::id(), Instant::now().elapsed().as_nanos());
-    let temp_path = parent.join(temp_name);
+    let filename = target
+        .file_name()
+        .and_then(|s| s.to_str())
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "Invalid target filename"))?;
 
-    {
-        let mut file = OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .mode(0o600)
-            .open(&temp_path)?;
+    let c_dest_name = CString::new(filename.as_bytes())
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
 
-        file.write_all(data)?;
-        file.sync_all()?;
-    }
+    let (mut stage_file, c_stage_name) = secure_dir.open_staging_file(".tmp_atomic", filename)?;
+    let mut guard = SecureDirCleanupGuard {
+        secure_dir: &secure_dir,
+        filename: c_stage_name.clone(),
+        active: true,
+    };
 
-    // Verify mode 0600 on created file
-    let mut perms = fs::metadata(&temp_path)?.permissions();
-    perms.set_mode(0o600);
-    fs::set_permissions(&temp_path, perms)?;
+    stage_file.write_all(data)?;
+    stage_file.sync_all()?;
 
-    fs::rename(&temp_path, target)?;
+    secure_dir.rename_file(&c_stage_name, &c_dest_name)?;
+    guard.active = false;
     Ok(())
 }
 

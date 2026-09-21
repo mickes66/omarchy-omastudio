@@ -1,3 +1,5 @@
+#![allow(clippy::excessive_precision, clippy::too_many_arguments)]
+
 pub mod ai;
 pub mod export;
 pub mod gdrive;

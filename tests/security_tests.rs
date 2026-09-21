@@ -260,3 +260,27 @@ fn test_ai_social_media_optimization() {
     assert_eq!(story.aspect_ratio_str, "9:16");
     assert_eq!(story.max_dimension, 1920);
 }
+
+#[test]
+fn test_secure_dir_hierarchy_rejects_symlinks() {
+    let base_dir = PathBuf::from("/tmp/omaraw_test_hierarchy");
+    let _ = fs::remove_dir_all(&base_dir);
+    fs::create_dir_all(&base_dir).expect("Create base dir");
+
+    let planted_target = base_dir.join("planted_target");
+    fs::create_dir_all(&planted_target).expect("Create planted target");
+
+    // Plant a symlink as intermediate component
+    let intermediate_symlink = base_dir.join("gdrive_symlink");
+    std::os::unix::fs::symlink(&planted_target, &intermediate_symlink).expect("Create intermediate symlink");
+
+    // Target path goes through intermediate symlink
+    let attacked_path = intermediate_symlink.join("subfolder");
+
+    // open_or_create_hierarchy must refuse to traverse symlink (O_NOFOLLOW / PermissionDenied)
+    let res = SecureDir::open_or_create_hierarchy(&attacked_path);
+    assert!(res.is_err(), "SecureDir::open_or_create_hierarchy must strictly reject following symlink hierarchy");
+
+    let _ = fs::remove_dir_all(&base_dir);
+}
+

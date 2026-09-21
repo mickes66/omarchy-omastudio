@@ -1,9 +1,9 @@
 use crate::security::{
-    ensure_secure_dir, run_bounded_command, run_bounded_command_stream_to_file, secure_command,
+    run_bounded_command, run_bounded_command_stream_to_file, secure_command,
+    SecureDir, SecureDirCleanupGuard,
 };
 use serde::{Deserialize, Serialize};
-use std::fs::OpenOptions;
-use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+use std::ffi::CString;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -144,30 +144,16 @@ pub fn list_gdrive_folder(subfolder: &str) -> Result<Vec<RemoteItem>, String> {
 
 pub const MAX_RAW_DOWNLOAD_BYTES: usize = 250 * 1024 * 1024; // 250 MiB hard limit
 
-/// RAII guard ensuring partial or failed download staging files are purged unconditionally
-struct DownloadCleanupGuard<'a> {
-    path: &'a Path,
-    active: bool,
-}
-
-impl<'a> Drop for DownloadCleanupGuard<'a> {
-    fn drop(&mut self) {
-        if self.active && self.path.exists() {
-            let _ = std::fs::remove_file(self.path);
-        }
-    }
-}
-
 /// Downloads a remote RAW file into local secure cache with strict byte limits,
-/// RAII partial file cleanup, and validation before atomic publish.
+/// RAII partial file cleanup, descriptor-bound directory operations, and validation before atomic publish.
 pub fn fetch_remote_raw(remote_path: &str) -> Result<PathBuf, String> {
     if remote_path.contains("..") || remote_path.contains('\0') {
         return Err("Invalid remote path: directory traversal or null bytes detected".to_string());
     }
 
     let cache_dir = default_gdrive_cache_dir();
-    ensure_secure_dir(&cache_dir)
-        .map_err(|e| format!("Could not create secure cache directory: {}", e))?;
+    let secure_dir = SecureDir::open_or_create_hierarchy(&cache_dir)
+        .map_err(|e| format!("Could not create secure cache directory hierarchy: {}", e))?;
 
     let clean_path = remote_path.trim_start_matches('/');
     let target_remote = format!("gdrive:{}", clean_path);
@@ -182,24 +168,18 @@ pub fn fetch_remote_raw(remote_path: &str) -> Result<PathBuf, String> {
     }
 
     let local_dest = cache_dir.join(filename);
+    let c_dest_name = CString::new(filename.as_bytes())
+        .map_err(|e| format!("Invalid filename string: {}", e))?;
 
-    // If cached, verify it is a secure, regular file, within size limits, and a valid RAW image.
-    // Purge corrupted/partial cache entries.
-    if local_dest.exists() {
+    // If cached, verify it via open descriptor: regular file, owned by user, mode 0600, size limit, LibRaw valid.
+    // Purge corrupted/partial cache entries descriptor-bound.
+    if let Ok(cached_file) = secure_dir.open_existing_file_ro(&c_dest_name) {
         let is_valid = (|| -> Option<()> {
-            let meta = std::fs::symlink_metadata(&local_dest).ok()?;
-            if meta.file_type().is_symlink() || !meta.file_type().is_file() {
+            let len = crate::security::verify_secure_open_file(&cached_file, MAX_RAW_DOWNLOAD_BYTES).ok()?;
+            if len < 1024 {
                 return None;
             }
-            if (meta.permissions().mode() & 0o077) != 0 {
-                return None;
-            }
-            let len = meta.len();
-            if len < 1024 || len > (MAX_RAW_DOWNLOAD_BYTES as u64) {
-                return None;
-            }
-            // Validate that LibRaw can open the cached file without error
-            if crate::raw::RawImage::open(&local_dest).is_err() {
+            if crate::raw::RawImage::open_from_file(&cached_file).is_err() {
                 return None;
             }
             Some(())
@@ -209,32 +189,19 @@ pub fn fetch_remote_raw(remote_path: &str) -> Result<PathBuf, String> {
         if is_valid {
             return Ok(local_dest);
         } else {
-            // Remove corrupted or partial cached file
-            let _ = std::fs::remove_file(&local_dest);
+            // Remove corrupted or partial cached file descriptor-bound
+            let _ = secure_dir.unlink_file(&c_dest_name);
         }
     }
 
-    let temp_name = format!(
-        ".tmp_gdrive_{}_{}_{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_nanos(),
-        filename
-    );
-    let temp_path = cache_dir.join(&temp_name);
+    // Create private staging file descriptor-bound with mode 0600 and O_NOFOLLOW
+    let (mut staging_file, c_staging_name) = secure_dir
+        .open_staging_file(".tmp_gdrive", filename)
+        .map_err(|e| format!("Failed to create private staging file in cache directory: {}", e))?;
 
-    let mut temp_file = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create_new(true)
-        .mode(0o600)
-        .open(&temp_path)
-        .map_err(|e| format!("Failed to create private staging file: {}", e))?;
-
-    let mut cleanup_guard = DownloadCleanupGuard {
-        path: &temp_path,
+    let mut cleanup_guard = SecureDirCleanupGuard {
+        secure_dir: &secure_dir,
+        filename: c_staging_name.clone(),
         active: true,
     };
 
@@ -245,33 +212,37 @@ pub fn fetch_remote_raw(remote_path: &str) -> Result<PathBuf, String> {
 
     run_bounded_command_stream_to_file(
         cmd,
-        &mut temp_file,
+        &mut staging_file,
         Duration::from_secs(180),
         MAX_RAW_DOWNLOAD_BYTES,
     )
     .map_err(|e| format!("Failed to download from Google Drive: {}", e))?;
 
-    // Verify opened file descriptor: regular file, owned by user, mode 0600, within limit
-    crate::security::verify_secure_open_file(&temp_file, MAX_RAW_DOWNLOAD_BYTES)
+    // Verify open staging file descriptor: regular file, owned by current user, mode 0600, within size bounds
+    crate::security::verify_secure_open_file(&staging_file, MAX_RAW_DOWNLOAD_BYTES)
         .map_err(|e| format!("Staging file security verification failed: {}", e))?;
 
-    // Drop open file handle before LibRaw open and atomic rename
-    drop(temp_file);
-
-    // Verify RAW image integrity with LibRaw
-    crate::raw::RawImage::open(&temp_path)
+    // Verify RAW image integrity directly via open file descriptor (no pathname swap window)
+    crate::raw::RawImage::open_from_file(&staging_file)
         .map_err(|e| format!("Downloaded file is not a valid RAW image: {}", e))?;
 
-    // Atomically publish into destination
-    std::fs::rename(&temp_path, &local_dest)
-        .map_err(|e| format!("Failed to publish downloaded file into cache: {}", e))?;
+    // Ensure staging file contents are flushed and synced to disk
+    staging_file
+        .sync_all()
+        .map_err(|e| format!("Failed to sync staging file: {}", e))?;
+
+    // Atomically publish into destination cache path descriptor-bound
+    secure_dir
+        .rename_file(&c_staging_name, &c_dest_name)
+        .map_err(|e| format!("Failed to atomically publish downloaded file into cache: {}", e))?;
 
     cleanup_guard.active = false;
+    drop(staging_file);
 
     // Automatically extract thumbnail for the fetched photo
     let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
     let thumb_dir = PathBuf::from(&home).join(".cache/omastudio/thumbnails");
-    let _ = ensure_secure_dir(&thumb_dir);
+    let _ = SecureDir::open_or_create_hierarchy(&thumb_dir);
     let stem = Path::new(&filename)
         .file_stem()
         .and_then(|s| s.to_str())

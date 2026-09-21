@@ -111,6 +111,30 @@ impl RawImage {
         })
     }
 
+    /// Opens a RAW image directly from a verified open file descriptor via /proc/self/fd/{fd}
+    /// without releasing the descriptor or following mutable disk paths.
+    pub fn open_from_file(file: &std::fs::File) -> Result<Self, String> {
+        use std::os::unix::io::AsRawFd;
+
+        let fd = file.as_raw_fd();
+        let proc_path = format!("/proc/self/fd/{}", fd);
+        let c_path = CString::new(proc_path.as_bytes())
+            .map_err(|e| format!("Invalid proc path string: {}", e))?;
+
+        let mut errcode: std::os::raw::c_int = 0;
+        // SAFETY: c_path is a valid null-terminated C string, errcode is a valid pointer
+        let handle = unsafe { omaraw_open(c_path.as_ptr(), &mut errcode) };
+
+        if handle.is_null() {
+            return Err(format!("LibRaw failed to open descriptor {}: code {}", fd, errcode));
+        }
+
+        Ok(Self {
+            handle,
+            path: PathBuf::from(proc_path),
+        })
+    }
+
     pub fn get_metadata(&self) -> Result<RawMetadata, String> {
         let mut cmeta = COmaRawMetadata {
             width: 0,

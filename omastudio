@@ -1,20 +1,69 @@
-#!/usr/bin/env bash
+#!/bin/bash -p
 set -euo pipefail
 
-DIR="$(cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")" && pwd)"
+# Immediate rejection of loader injection
+if [ -n "${LD_PRELOAD:-}" ] || [ -n "${LD_LIBRARY_PATH:-}" ]; then
+    echo "Security Error: Prohibited loader control variable detected" >&2
+    exit 1
+fi
+
+# Re-exec through fixed trusted shell under sanitized environment (/usr/bin/env -i)
+if [ "${OMASTUDIO_SECURE_ENV:-0}" != "1" ]; then
+    exec /usr/bin/env -i \
+        PATH="/usr/bin:/bin:${HOME}/.local/bin:${HOME}/.cargo/bin" \
+        HOME="${HOME}" \
+        USER="${USER:-$(/usr/bin/id -un 2>/dev/null || echo "user")}" \
+        LANG="${LANG:-C.UTF-8}" \
+        LC_ALL="${LC_ALL:-C.UTF-8}" \
+        DISPLAY="${DISPLAY:-}" \
+        WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-}" \
+        XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(/usr/bin/id -u 2>/dev/null || echo 1000)}" \
+        XDG_DATA_DIRS="${XDG_DATA_DIRS:-/usr/local/share:/usr/share}" \
+        XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-${HOME}/.config}" \
+        XDG_CACHE_HOME="${XDG_CACHE_HOME:-${HOME}/.cache}" \
+        OMASTUDIO_SECURE_ENV=1 \
+        /bin/bash -p "$0" "$@"
+fi
+
+# Reject unexpected build and loader controls before building or launching
+for var in LD_PRELOAD LD_LIBRARY_PATH RUSTC_WRAPPER CARGO_BUILD_RUSTC_WRAPPER RUSTFLAGS CARGO_HOME BASH_ENV ENV; do
+    if [ -n "${!var+x}" ]; then
+        echo "Security Error: Prohibited build/loader control variable detected: ${var}" >&2
+        exit 1
+    fi
+done
+
+DIR="$(cd "$(/usr/bin/dirname "$(/usr/bin/realpath "${BASH_SOURCE[0]}")")" && /usr/bin/pwd)"
 BIN="${HOME}/.local/bin/omastudio-engine"
 
-# Ensure binary exists or build it
+# Resolve trusted cargo binary
+CARGO_BIN=""
+if [[ -x /usr/bin/cargo ]]; then
+    CARGO_BIN="/usr/bin/cargo"
+elif [[ -x "${HOME}/.cargo/bin/cargo" ]]; then
+    CARGO_BIN="${HOME}/.cargo/bin/cargo"
+fi
+
+# Ensure binary exists or build it using trusted absolute tools
 if [[ ! -x "${BIN}" ]]; then
     if [[ -f "${DIR}/target/release/omastudio-engine" ]]; then
-        install -d -m 755 "${HOME}/.local/bin"
-        install -m 755 "${DIR}/target/release/omastudio-engine" "${BIN}"
-    elif command -v cargo >/dev/null 2>&1 && [[ -f "${DIR}/Cargo.toml" ]]; then
+        /usr/bin/install -d -m 755 "${HOME}/.local/bin"
+        /usr/bin/install -m 755 "${DIR}/target/release/omastudio-engine" "${BIN}"
+    elif [[ -n "${CARGO_BIN}" && -f "${DIR}/Cargo.toml" ]]; then
         echo "Building omastudio-engine from source..."
-        (cd "${DIR}" && cargo build --release --locked && install -d -m 755 "${HOME}/.local/bin" && install -m 755 target/release/omastudio-engine "${BIN}") || true
+        (cd "${DIR}" && "${CARGO_BIN}" build --release --locked && /usr/bin/install -d -m 755 "${HOME}/.local/bin" && /usr/bin/install -m 755 "${DIR}/target/release/omastudio-engine" "${BIN}") || true
     fi
 fi
 
+# Locate Quickshell binary
+QUICKSHELL_BIN=""
+if [[ -x /usr/bin/quickshell ]]; then
+    QUICKSHELL_BIN="/usr/bin/quickshell"
+elif [[ -x /usr/local/bin/quickshell ]]; then
+    QUICKSHELL_BIN="/usr/local/bin/quickshell"
+elif [[ -x "${HOME}/.local/bin/quickshell" ]]; then
+    QUICKSHELL_BIN="${HOME}/.local/bin/quickshell"
+fi
 
 # Resolve QML shell path
 QML_SHELL=""
@@ -24,8 +73,8 @@ elif [[ -f "${HOME}/.local/share/omastudio/qml/shell.qml" ]]; then
     QML_SHELL="${HOME}/.local/share/omastudio/qml/shell.qml"
 elif [[ -f "/usr/share/omastudio/qml/shell.qml" ]]; then
     QML_SHELL="/usr/share/omastudio/qml/shell.qml"
-elif [[ -f "${HOME}/Projects/omarchy-omastudio/qml/shell.qml" ]]; then
-    QML_SHELL="${HOME}/Projects/omarchy-omastudio/qml/shell.qml"
+elif [[ -f "${HOME}/Projects/omarchy/omarchy-omastudio/qml/shell.qml" ]]; then
+    QML_SHELL="${HOME}/Projects/omarchy/omarchy-omastudio/qml/shell.qml"
 fi
 
 # If CLI arguments passed or --cli flag requested, delegate to binary
@@ -34,17 +83,17 @@ if [[ "${1:-}" == "--cli" ]]; then
     exec "${BIN}" "$@"
 elif [[ "${1:-}" == "ipc" ]]; then
     shift
-    if [[ -z "${QML_SHELL}" ]]; then
-        echo "Error: OmaStudio QML shell not found." >&2
+    if [[ -z "${QML_SHELL}" || -z "${QUICKSHELL_BIN}" ]]; then
+        echo "Error: OmaStudio QML shell or quickshell binary not found." >&2
         exit 1
     fi
     if [[ "${1:-}" == "show" ]]; then
-        exec quickshell ipc -p "${QML_SHELL}" show
+        exec "${QUICKSHELL_BIN}" ipc -p "${QML_SHELL}" show
     elif [[ "${1:-}" == "call" ]]; then
         shift
-        exec quickshell ipc -p "${QML_SHELL}" call ozdil.omastudio "$@"
+        exec "${QUICKSHELL_BIN}" ipc -p "${QML_SHELL}" call ozdil.omastudio "$@"
     else
-        exec quickshell ipc -p "${QML_SHELL}" call ozdil.omastudio "$@"
+        exec "${QUICKSHELL_BIN}" ipc -p "${QML_SHELL}" call ozdil.omastudio "$@"
     fi
 elif [[ "${1:-}" == "--help" || "${1:-}" == "-h" || "${1:-}" == "help" ]]; then
     exec "${BIN}" help
@@ -54,10 +103,10 @@ elif [[ "${1:-}" == "--status" || "${1:-}" == "status" ]]; then
     exec "${BIN}" status
 elif [[ "${1:-}" == "theme" ]]; then
     shift
-    if [[ "${1:-}" == "reload" ]] && command -v quickshell >/dev/null 2>&1 && [[ -n "${QML_SHELL}" ]]; then
-        exec quickshell ipc -p "${QML_SHELL}" call ozdil.omastudio reloadTheme
-    elif [[ "${1:-}" == "get" ]] && command -v quickshell >/dev/null 2>&1 && [[ -n "${QML_SHELL}" ]]; then
-        exec quickshell ipc -p "${QML_SHELL}" call ozdil.omastudio getTheme
+    if [[ "${1:-}" == "reload" && -n "${QUICKSHELL_BIN}" && -n "${QML_SHELL}" ]]; then
+        exec "${QUICKSHELL_BIN}" ipc -p "${QML_SHELL}" call ozdil.omastudio reloadTheme
+    elif [[ "${1:-}" == "get" && -n "${QUICKSHELL_BIN}" && -n "${QML_SHELL}" ]]; then
+        exec "${QUICKSHELL_BIN}" ipc -p "${QML_SHELL}" call ozdil.omastudio getTheme
     else
         exec "${BIN}" theme "$@"
     fi
@@ -69,8 +118,9 @@ elif [[ $# -gt 0 ]]; then
             ;;
         *)
             # If it's a file path and quickshell is already running, load via IPC
-            if [[ -f "${1:-}" ]] && command -v quickshell >/dev/null 2>&1; then
-                if quickshell ipc call ozdil.omastudio openPhoto "$(realpath "$1")" >/dev/null 2>&1; then
+            if [[ -f "${1:-}" && -n "${QUICKSHELL_BIN}" ]]; then
+                TARGET_PHOTO="$(/usr/bin/realpath "$1")"
+                if "${QUICKSHELL_BIN}" ipc call ozdil.omastudio openPhoto "${TARGET_PHOTO}" >/dev/null 2>&1; then
                     echo "Loaded photo in running OmaStudio instance: $1"
                     exit 0
                 fi
@@ -80,15 +130,15 @@ elif [[ $# -gt 0 ]]; then
 fi
 
 # Try quickshell IPC toggle if already running and no args passed
-if [[ $# -eq 0 ]] && command -v quickshell >/dev/null 2>&1; then
-    if quickshell ipc call ozdil.omastudio toggle >/dev/null 2>&1; then
+if [[ $# -eq 0 && -n "${QUICKSHELL_BIN}" ]]; then
+    if "${QUICKSHELL_BIN}" ipc call ozdil.omastudio toggle >/dev/null 2>&1; then
         exit 0
     fi
 fi
 
 # Otherwise launch Quickshell Studio UI
-if command -v quickshell >/dev/null 2>&1 && [[ -n "${QML_SHELL}" ]]; then
-    exec quickshell -p "${QML_SHELL}"
+if [[ -n "${QUICKSHELL_BIN}" && -n "${QML_SHELL}" ]]; then
+    exec "${QUICKSHELL_BIN}" -p "${QML_SHELL}"
 else
     echo "Quickshell is not found on PATH or QML shell is missing. Falling back to omastudio-engine CLI."
     exec "${BIN}" help
