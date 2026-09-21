@@ -21,9 +21,12 @@
 > [mickes66/omarchy-omastudio](https://github.com/mickes66/omarchy-omastudio), branch [`local-fixes`](https://github.com/mickes66/omarchy-omastudio/tree/local-fixes), diverging from upstream [ozdil/omarchy-omastudio](https://github.com/ozdil/omarchy-omastudio):
 >
 > - **JPEG and TIFF import**, alongside every RAW format below — same non-destructive pipeline, color grading, AI tools, and multi-format export, now usable on ordinary photos too. EXIF (camera, lens, ISO, shutter, aperture, focal length, timestamp) is read for both formats when present.
+> - **"Local Photos" now shows recently opened photos**, not a fixed folder — opening any photo, from anywhere, adds it to the filmstrip automatically (backed by the engine's existing on-disk catalog). No manual refresh needed, and it isn't tied to `~/Pictures` or any other single directory.
+> - **Close and hide controls in the filmstrip/canvas** — an × next to the open photo's filename clears the canvas back to empty, and a hover × on any filmstrip thumbnail hides it from the current view. Both are view-only; neither ever touches a file on disk.
+> - **Fixed a render bug**: opening a second photo in the same session left the canvas silently showing the first one (EXIF/histogram updated, canvas didn't) — a ping-pong output-file counter was being reset on every photo load, so the first render after any load collided with the previous photo's render path and Qt skipped the reload. This one reproduces on stock RAW workflows too, not just the JPEG/TIFF addition — kept fork-only for now since it surfaced through the recent-photos rework above, which is itself fork-only.
 > - A portability fix so the engine actually finds itself on any machine, not just the original author's (see upstream [issue #1](https://github.com/ozdil/omarchy-omastudio/issues/1) / [PR #2](https://github.com/ozdil/omarchy-omastudio/pull/2), submitted upstream and awaiting review).
 >
-> The JPEG/TIFF addition is fork-only by design — upstream OmaStudio is intentionally a RAW-only editor, so it isn't proposed there. Full diff: [`master...local-fixes`](https://github.com/mickes66/omarchy-omastudio/compare/master...local-fixes).
+> Everything above except the portability fix is fork-only by design — upstream OmaStudio is intentionally a RAW-only, fixed-folder editor. Full diff: [`master...local-fixes`](https://github.com/mickes66/omarchy-omastudio/compare/master...local-fixes).
 
 ---
 
