@@ -13,7 +13,7 @@ Rectangle {
     color: Theme.bgBase
 
     // State Variables
-    property string activePhotoPath: "/home/ozdil/Downloads/yurt/_DSF2246.RAF"
+    property string activePhotoPath: ""
     property string currentRenderPath: "/dev/shm/omastudio_viewport.ppm"
     property var activeMetadata: null
     property var activeHistogram: null
@@ -83,7 +83,7 @@ Rectangle {
     property var daemonQueue: []
 
     function resolveEnginePath() {
-        return "/home/ozdil/.local/bin/omastudio-engine";
+        return Quickshell.env("HOME") + "/.local/bin/omastudio-engine";
     }
 
     function showToast(msg, col) {
@@ -1800,8 +1800,8 @@ Rectangle {
     }
 
     Component.onCompleted: {
-        scanLocalFolder("~/Downloads/yurt");
-        loadPhoto(root.activePhotoPath);
+        scanLocalFolder("~/Pictures");
+        if (root.activePhotoPath !== "") loadPhoto(root.activePhotoPath);
     }
 
     Component.onDestruction: {
