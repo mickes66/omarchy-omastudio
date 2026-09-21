@@ -735,7 +735,16 @@ fn run_daemon() {
                                 c.raw_buffer_16 = Some(u16_vec);
                                 c.raw_buffer_8 = Some(u8_vec.clone());
                                 c.metadata = Some(meta.clone());
-                                c.ping_pong = 0;
+                                // Deliberately NOT resetting ping_pong here: the ping-pong
+                                // filename swap exists specifically so the QML Image's
+                                // `source` string changes on every render, forcing Qt to
+                                // reload from disk (an unchanged source string is a no-op
+                                // even when the file's contents changed). Resetting it to 0
+                                // on every load meant the first render after ANY load always
+                                // landed on the same slot as the previous photo's first
+                                // render, so the canvas silently kept showing the old image
+                                // after opening a second photo. Let it keep alternating
+                                // across loads instead.
 
                                 let home = env::var("HOME").unwrap_or_else(|_| ".".to_string());
                                 let thumb_path = PathBuf::from(home)
