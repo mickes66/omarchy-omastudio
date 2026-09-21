@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Controls
 import "../theme"
 
 Rectangle {
@@ -25,6 +26,7 @@ Rectangle {
     signal undoClicked()
     signal redoClicked()
     signal exportClicked()
+    signal closePhotoClicked()
 
     RowLayout {
         anchors.fill: parent
@@ -79,19 +81,50 @@ Rectangle {
         // Active filename badge
         Rectangle {
             visible: root.activePhotoName !== ""
-            implicitWidth: photoNameText.implicitWidth + 14
+            implicitWidth: photoNameRow.implicitWidth + 10
             implicitHeight: 22
             radius: 4
             color: Theme.bgCard
             border.color: Theme.border
-            Text {
-                id: photoNameText
+
+            RowLayout {
+                id: photoNameRow
                 anchors.centerIn: parent
-                text: root.activePhotoName
-                textFormat: Text.PlainText
-                font.pixelSize: 10
-                font.family: Theme.monoFont
-                color: Theme.textMain
+                spacing: 6
+
+                Text {
+                    id: photoNameText
+                    text: root.activePhotoName
+                    textFormat: Text.PlainText
+                    font.pixelSize: 10
+                    font.family: Theme.monoFont
+                    color: Theme.textMain
+                }
+
+                Rectangle {
+                    implicitWidth: 16
+                    implicitHeight: 16
+                    radius: 8
+                    color: closeMouse.containsMouse ? Theme.highlightClip : "transparent"
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: "✕"
+                        textFormat: Text.PlainText
+                        font.pixelSize: 9
+                        color: closeMouse.containsMouse ? Theme.bgBase : Theme.textMuted
+                    }
+
+                    MouseArea {
+                        id: closeMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        ToolTip.visible: containsMouse
+                        ToolTip.text: "Close photo"
+                        onClicked: root.closePhotoClicked()
+                    }
+                }
             }
         }
 

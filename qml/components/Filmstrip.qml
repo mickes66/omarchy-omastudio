@@ -13,7 +13,7 @@ Rectangle {
     property var photoList: []
     property string activePhotoPath: ""
     property bool isGdriveMode: false
-    property string currentFolder: "~/Downloads/yurt"
+    property string currentFolder: "~/Pictures"
     property bool isDownloadingRemote: false
 
     signal selectPhoto(string path, bool isRemote)
@@ -21,6 +21,7 @@ Rectangle {
     signal parentFolderRequested()
     signal refreshRequested()
     signal switchSource(bool gdrive)
+    signal hidePhoto(string path)
 
     ColumnLayout {
         anchors.fill: parent
@@ -226,12 +227,48 @@ Rectangle {
             }
 
             delegate: Rectangle {
+                id: card
                 width: 90
                 height: listView.height
                 radius: Theme.radiusSm
                 color: root.activePhotoPath === modelData.path ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.25) : Theme.bgCard
                 border.color: root.activePhotoPath === modelData.path ? Theme.accent : Theme.border
                 border.width: root.activePhotoPath === modelData.path ? 2 : 1
+
+                HoverHandler {
+                    id: cardHover
+                }
+
+                // Hide-from-list button (view only; never touches the file on disk).
+                Rectangle {
+                    visible: cardHover.hovered && modelData.is_dir !== true
+                    z: 10
+                    anchors.top: parent.top
+                    anchors.left: parent.left
+                    anchors.margins: 3
+                    width: 16
+                    height: 16
+                    radius: 8
+                    color: hideMouse.containsMouse ? Theme.highlightClip : Qt.rgba(0, 0, 0, 0.75)
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: "✕"
+                        textFormat: Text.PlainText
+                        font.pixelSize: 9
+                        color: hideMouse.containsMouse ? Theme.bgBase : Theme.textMuted
+                    }
+
+                    MouseArea {
+                        id: hideMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        ToolTip.visible: containsMouse
+                        ToolTip.text: "Hide from list (keeps the file)"
+                        onClicked: root.hidePhoto(modelData.path)
+                    }
+                }
 
                 ColumnLayout {
                     anchors.fill: parent

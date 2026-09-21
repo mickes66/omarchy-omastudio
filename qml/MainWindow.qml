@@ -19,6 +19,9 @@ Rectangle {
     property var activeHistogram: null
     property var activeScene: null
     property var photoList: []
+    // Paths hidden from the filmstrip (view-only; never touches the file on
+    // disk). Cleared automatically on the next rescan/refresh of the folder.
+    property var hiddenPaths: []
 
     property bool isProMode: false
     property bool isSplitView: false
@@ -602,6 +605,18 @@ Rectangle {
         });
     }
 
+    /// Clears the currently open photo back to the empty-canvas state. Never
+    /// touches the file on disk — it stays in Local Photos / Google Drive and
+    /// can be reopened from the filmstrip at any time.
+    function closeActivePhoto() {
+        root.activePhotoPath = "";
+        root.activeMetadata = null;
+        root.activeHistogram = null;
+        root.activeScene = null;
+        viewport.imageSource = "";
+        navigator.imageSource = "";
+    }
+
     function scanLocalFolder(dir) {
         listProc.command = [root.resolveEnginePath(), "scan", dir];
         listProc.running = true;
@@ -718,6 +733,7 @@ Rectangle {
             onZoom100: viewport.setZoomAbsolute(1.0)
             onZoom200: viewport.setZoomAbsolute(2.0)
             onExportClicked: root.showExportModal = true
+            onClosePhotoClicked: root.closeActivePhoto()
         }
 
         // WORKSPACE CENTER (LEFT: NAVIGATOR + HISTOGRAM + EXIF, CENTER: CANVAS, RIGHT: ADJUSTMENTS)
@@ -1682,9 +1698,15 @@ Rectangle {
         Filmstrip {
             id: filmstrip
             Layout.fillWidth: true
-            photoList: root.photoList
+            photoList: root.photoList.filter(function(item) {
+                return root.hiddenPaths.indexOf(item.path) === -1;
+            })
             activePhotoPath: root.activePhotoPath
             isDownloadingRemote: root.isDownloadingRemote
+            onHidePhoto: function(path) {
+                root.hiddenPaths = root.hiddenPaths.concat([path]);
+                if (root.activePhotoPath === path) root.closeActivePhoto();
+            }
             onSelectPhoto: function(path, isRemote) {
                 if (isRemote) {
                     root.isDownloadingRemote = true;
@@ -1722,16 +1744,18 @@ Rectangle {
                     listProc.command = [root.resolveEnginePath(), "gdrive", "list", root.currentGdrivePath];
                     listProc.running = true;
                 } else {
-                    filmstrip.currentFolder = "~/Downloads/yurt";
-                    root.scanLocalFolder("~/Downloads/yurt");
+                    filmstrip.currentFolder = "~/Pictures";
+                    root.hiddenPaths = [];
+                    root.scanLocalFolder("~/Pictures");
                 }
             }
             onRefreshRequested: {
+                root.hiddenPaths = [];
                 if (filmstrip.isGdriveMode) {
                     listProc.command = [root.resolveEnginePath(), "gdrive", "list", root.currentGdrivePath];
                     listProc.running = true;
                 } else {
-                    root.scanLocalFolder("~/Downloads/yurt");
+                    root.scanLocalFolder("~/Pictures");
                 }
             }
         }
